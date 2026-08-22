@@ -1,0 +1,62 @@
+name: Daily build
+
+on:
+  schedule:
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: pipeline-build
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Restore raw data cache
+        uses: actions/cache@v4
+        with:
+          path: cache/raw
+          key: pipeline-raw-${{ github.run_id }}
+          restore-keys: |
+            pipeline-raw-
+
+      - name: Run daily incremental build
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: python -m pipeline.build --daily
+
+      - name: Save raw data cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: cache/raw
+          key: pipeline-raw-${{ github.run_id }}
+
+      - name: Commit updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "No data changes"
+          else
+            git commit -m "Daily build $(date -u +%Y-%m-%d)"
+            git push
+          fi
