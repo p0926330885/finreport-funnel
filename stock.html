@@ -1,4529 +1,2541 @@
 <!DOCTYPE html>
-
 <html lang="zh-Hant">
-
 <head>
-
 <meta charset="UTF-8">
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-
 <title>示範系統 6789 · 財報轉化漏斗</title>
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
-
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-
 <style>
-
 /* =========================================================
-
    Tokens
-
    ========================================================= */
-
 :root {
-
   --bg: #0d0f14;
-
   --bg-2: #0a0c11;
-
   --panel: #151922;
-
   --panel-2: #1c2130;
-
   --panel-3: #232838;
-
   --line: #262c3d;
-
   --line-2: #303648;
-
   --line-soft: #1e2331;
-
   --text: #e8ecf2;
-
   --text-dim: #8a94a8;
-
   --text-muted: #5a6478;
 
   --brass: #d4a574;
-
   --brass-2: #b88a5b;
-
   --brass-hi: #e6bd8f;
-
   --brass-dim: rgba(212, 165, 116, 0.15);
-
   --brass-line: rgba(212, 165, 116, 0.35);
-
   --mint: #5eead4;
-
   --mint-dim: rgba(94, 234, 212, 0.15);
-
   --mint-line: rgba(94, 234, 212, 0.4);
-
   --amber: #fbbf24;
-
   --amber-dim: rgba(251, 191, 36, 0.15);
-
   --amber-line: rgba(251, 191, 36, 0.4);
-
   --coral: #f87171;
-
   --coral-dim: rgba(248, 113, 113, 0.15);
-
   --coral-line: rgba(248, 113, 113, 0.4);
 
   --font-ui: 'Inter', 'Noto Sans TC', -apple-system, sans-serif;
-
   --font-num: 'JetBrains Mono', ui-monospace, monospace;
 
   --radius: 12px;
-
   --radius-lg: 16px;
-
   --radius-sm: 6px;
-
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html { scroll-behavior: smooth; }
-
 body {
-
   background:
-
     radial-gradient(1200px 500px at 15% -10%, rgba(212, 165, 116, 0.06), transparent 60%),
-
     radial-gradient(1000px 400px at 100% 0%, rgba(94, 234, 212, 0.035), transparent 50%),
-
     var(--bg);
-
   color: var(--text);
-
   font-family: var(--font-ui);
-
   font-size: 14.5px;
-
   line-height: 1.5;
-
   min-height: 100vh;
-
   -webkit-font-smoothing: antialiased;
-
   -moz-osx-font-smoothing: grayscale;
-
 }
 
 button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
-
 input { font-family: inherit; }
 
 .mono { font-family: var(--font-num); }
-
 .dim { color: var(--text-dim); }
-
 .muted { color: var(--text-muted); }
 
 /* =========================================================
-
    Topbar
-
    ========================================================= */
-
 .topbar {
-
   height: 60px;
-
   border-bottom: 1px solid var(--line);
-
   background: rgba(13, 15, 20, 0.85);
-
   backdrop-filter: blur(16px);
-
   -webkit-backdrop-filter: blur(16px);
-
   position: sticky;
-
   top: 0;
-
   z-index: 30;
-
   display: flex;
-
   align-items: center;
-
   padding: 0 24px;
-
   gap: 24px;
-
 }
 
 .brand {
-
   display: flex;
-
   align-items: center;
-
   gap: 10px;
-
 }
 
 .brand-mark {
-
   width: 30px;
-
   height: 30px;
-
   border-radius: 8px;
-
   background: linear-gradient(135deg, rgba(212, 165, 116, 0.3), rgba(212, 165, 116, 0.08));
-
   border: 1px solid var(--brass-line);
-
   display: grid;
-
   place-items: center;
-
   color: var(--brass);
-
   font-family: var(--font-num);
-
   font-weight: 700;
-
   font-size: 12px;
-
   letter-spacing: -0.5px;
-
 }
 
 .brand-text {
-
   font-weight: 600;
-
   font-size: 14px;
-
   letter-spacing: 0.2px;
-
 }
 
 .brand-text .sub {
-
   display: block;
-
   font-size: 10px;
-
   color: var(--text-muted);
-
   font-weight: 400;
-
   letter-spacing: 0.05em;
-
   text-transform: uppercase;
-
   margin-top: 1px;
-
   font-family: var(--font-num);
-
 }
 
 .nav-tabs {
-
   display: flex;
-
   gap: 4px;
-
   margin-left: 12px;
-
 }
 
 .nav-tab {
-
   padding: 7px 12px;
-
   font-size: 13px;
-
   color: var(--text-dim);
-
   border-radius: 8px;
-
   transition: all 0.15s;
-
 }
 
 .nav-tab:hover { color: var(--text); }
-
 .nav-tab.active {
-
   color: var(--brass);
-
   background: var(--brass-dim);
-
 }
 
 .topbar-spacer { flex: 1; }
 
 .search-box {
-
   position: relative;
-
   width: 260px;
-
 }
 
 .search-box input {
-
   width: 100%;
-
   height: 36px;
-
   background: var(--panel);
-
   border: 1px solid var(--line);
-
   border-radius: 8px;
-
   padding: 0 14px 0 34px;
-
   color: var(--text);
-
   font-family: var(--font-num);
-
   font-size: 13px;
-
   outline: none;
-
   transition: border-color 0.15s;
-
 }
 
 .search-box input:focus {
-
   border-color: var(--brass-line);
-
   box-shadow: 0 0 0 3px var(--brass-dim);
-
 }
 
 .search-box::before {
-
   content: "";
-
   position: absolute;
-
   left: 12px;
-
   top: 50%;
-
   transform: translateY(-50%);
-
   width: 14px;
-
   height: 14px;
-
   border: 1.5px solid var(--text-muted);
-
   border-radius: 50%;
-
   box-shadow: 6px 6px 0 -4px var(--text-muted);
-
 }
 
 .status-btn {
-
   height: 36px;
-
   padding: 0 12px;
-
   background: var(--panel);
-
   border: 1px solid var(--line);
-
   border-radius: 8px;
-
   color: var(--text-dim);
-
   font-size: 12px;
-
   display: inline-flex;
-
   align-items: center;
-
   gap: 8px;
-
 }
 
 .status-dot {
-
   width: 6px;
-
   height: 6px;
-
   border-radius: 50%;
-
   background: var(--mint);
-
   box-shadow: 0 0 6px var(--mint);
-
   animation: status-breathe 2s ease-in-out infinite;
-
 }
 
 @keyframes status-breathe {
-
   0%, 100% { opacity: 0.55; box-shadow: 0 0 3px var(--mint); }
-
   50% { opacity: 1; box-shadow: 0 0 9px var(--mint); }
-
 }
 
 /* =========================================================
-
    Layout
-
    ========================================================= */
-
 .wrap {
-
   max-width: 1280px;
-
   margin: 0 auto;
-
   padding: 24px;
-
 }
 
 @media (max-width: 900px) {
-
   .wrap { padding: 16px; }
-
   .topbar { padding: 0 16px; gap: 12px; }
-
   .search-box { width: 180px; }
-
   .brand-text .sub { display: none; }
-
 }
 
 @media (max-width: 640px) {
-
   .search-box { display: none; }
-
   .nav-tabs { margin-left: 0; }
-
 }
 
 /* =========================================================
-
    Stock hero
-
    ========================================================= */
-
 .stock-hero {
-
   display: flex;
-
   align-items: flex-end;
-
   justify-content: space-between;
-
   gap: 16px;
-
   padding-bottom: 20px;
-
   margin-bottom: 24px;
-
   border-bottom: 1px solid var(--line);
-
   flex-wrap: wrap;
-
 }
 
 .hero-left { display: flex; flex-direction: column; gap: 4px; }
 
 .hero-crumb {
-
   font-size: 11px;
-
   color: var(--text-muted);
-
   letter-spacing: 0.06em;
-
   text-transform: uppercase;
-
   font-family: var(--font-num);
-
 }
 
 .hero-title {
-
   display: flex;
-
   align-items: baseline;
-
   gap: 14px;
-
   flex-wrap: wrap;
-
 }
 
 .hero-id {
-
   font-family: var(--font-num);
-
   font-size: 30px;
-
   font-weight: 600;
-
   color: var(--brass);
-
   letter-spacing: -0.02em;
-
   line-height: 1;
-
 }
 
 .hero-name {
-
   font-size: 22px;
-
   font-weight: 600;
-
   letter-spacing: -0.005em;
-
   line-height: 1;
-
 }
 
 .hero-chips {
-
   display: flex;
-
   gap: 8px;
-
   align-items: center;
-
   margin-top: 8px;
-
   flex-wrap: wrap;
-
 }
 
 .chip {
-
   padding: 4px 10px;
-
   border: 1px solid var(--line-2);
-
   background: var(--panel-2);
-
   border-radius: 999px;
-
   font-size: 11.5px;
-
   color: var(--text-dim);
-
   font-family: var(--font-num);
-
 }
 
 .chip-good {
-
   border-color: var(--mint-line);
-
   color: var(--mint);
-
 }
 
 .chip-good::before {
-
   content: "";
-
   display: inline-block;
-
   width: 6px;
-
   height: 6px;
-
   border-radius: 50%;
-
   background: var(--mint);
-
   box-shadow: 0 0 6px var(--mint);
-
   margin-right: 6px;
-
   vertical-align: 1px;
-
 }
 
 .hero-right {
-
   display: flex;
-
   align-items: center;
-
   gap: 12px;
-
 }
 
 .q-picker {
-
   display: inline-flex;
-
   align-items: center;
-
   gap: 10px;
-
   padding: 9px 14px;
-
   background: var(--panel);
-
   border: 1px solid var(--line);
-
   border-radius: 10px;
-
   color: var(--text);
-
   font-family: var(--font-num);
-
   font-weight: 500;
-
   font-size: 13px;
-
   transition: border-color 0.15s;
-
 }
 
 .q-picker:hover { border-color: var(--brass-line); }
-
 .q-picker .caret { color: var(--text-muted); font-size: 9px; }
 
 /* =========================================================
-
    Card
-
    ========================================================= */
-
 .card {
-
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.008), transparent 25%), var(--panel);
-
   border: 1px solid var(--line);
-
   border-radius: var(--radius-lg);
-
   padding: 22px 24px;
-
   margin-bottom: 18px;
-
 }
 
 .card-head {
-
   display: flex;
-
   justify-content: space-between;
-
   align-items: flex-start;
-
   gap: 16px;
-
   margin-bottom: 20px;
-
 }
 
 .card-head h3 {
-
   font-size: 15px;
-
   font-weight: 600;
-
   letter-spacing: -0.005em;
-
   line-height: 1.3;
-
 }
 
 .card-head p {
-
   font-size: 11.5px;
-
   color: var(--text-muted);
-
   font-family: var(--font-num);
-
   margin-top: 3px;
-
 }
 
 .card-head .unit {
-
   font-size: 11px;
-
   color: var(--text-muted);
-
   font-family: var(--font-num);
-
 }
 
 .status-btn,
-
 .q-picker,
-
 .growth-tab,
-
 .period-toggle,
-
 .metric-toggle,
-
 .ma-toggle { font-family: var(--font-num); }
 
 /* Two-column grid on desktop */
-
 .two-col {
-
   display: grid;
-
   grid-template-columns: 1fr 1fr;
-
   gap: 18px;
-
   margin-bottom: 18px;
-
 }
 
 .two-col > .card { margin-bottom: 0; }
 
 @media (max-width: 900px) {
-
   .two-col { grid-template-columns: 1fr; }
-
 }
 
 /* =========================================================
-
    CL Panel — signature of the "訂單能見度" section
-
    Left: 4 KPI stack (聖暉/XQ style)
-
    Right: bar + line chart
-
    ========================================================= */
-
 .cl-panel {
-
   display: grid;
-
   grid-template-columns: 220px 1fr;
-
   gap: 24px;
-
 }
 
 @media (max-width: 900px) {
-
   .cl-panel { grid-template-columns: 1fr; }
-
 }
 
 .cl-stats {
-
   display: flex;
-
   flex-direction: column;
-
   gap: 0;
-
   padding-right: 24px;
-
   border-right: 1px solid var(--line);
-
 }
 
 @media (max-width: 900px) {
-
   .cl-stats {
-
     border-right: none;
-
     border-bottom: 1px solid var(--line);
-
     padding-right: 0;
-
     padding-bottom: 16px;
-
     display: grid;
-
     grid-template-columns: 1fr 1fr;
-
     gap: 12px;
-
   }
-
 }
 
 .cl-kpi {
-
   padding: 12px 0;
-
   border-bottom: 1px dashed var(--line-soft);
-
 }
 
 .cl-kpi:last-child { border-bottom: none; }
 
 @media (max-width: 900px) {
-
   .cl-kpi {
-
     padding: 8px 0;
-
     border-bottom: none;
-
     border-right: 1px dashed var(--line-soft);
-
     padding-right: 12px;
-
   }
-
   .cl-kpi:nth-child(even) { border-right: none; padding-right: 0; }
-
 }
 
 .cl-kpi .label {
-
   font-size: 11px;
-
   color: var(--text-muted);
-
   letter-spacing: 0.05em;
-
   margin-bottom: 6px;
-
 }
 
 .cl-kpi .val {
-
   font-family: var(--font-num);
-
   font-size: 24px;
-
   font-weight: 600;
-
   color: var(--text);
-
   letter-spacing: -0.015em;
-
   line-height: 1.1;
-
 }
 
 .cl-kpi .val .unit {
-
   font-size: 11px;
-
   font-weight: 400;
-
   color: var(--text-muted);
-
   margin-left: 3px;
-
 }
 
 .cl-kpi.pos .val { color: var(--mint); }
-
 .cl-kpi.neg .val { color: var(--coral); }
 
 .cl-kpi .delta {
-
   font-family: var(--font-num);
-
   font-size: 12px;
-
   color: var(--text-dim);
-
   margin-top: 3px;
-
 }
 
 .cl-chart-wrap {
-
   display: flex;
-
   flex-direction: column;
-
   gap: 12px;
-
 }
 
 .cl-chart-legend {
-
   display: flex;
-
   gap: 20px;
-
   font-size: 12px;
-
   color: var(--text-dim);
-
   flex-wrap: wrap;
-
 }
 
 .cl-chart-legend .item {
-
   display: inline-flex;
-
   align-items: center;
-
   gap: 6px;
-
 }
 
 .cl-chart-legend .swatch-bar {
-
   width: 12px;
-
   height: 10px;
-
   background: var(--brass);
-
   opacity: 0.55;
-
   border-radius: 2px;
-
 }
 
 .cl-chart-legend .swatch-line {
-
   width: 14px;
-
   height: 2px;
-
   background: var(--mint);
-
   border-radius: 1px;
-
 }
 
 .cl-chart-box {
-
   position: relative;
-
   height: 220px;
-
 }
 
 .cl-note {
-
   margin-top: 12px;
-
   padding: 12px 14px;
-
   border-radius: 10px;
-
   background: var(--panel-2);
-
   border-left: 3px solid var(--brass);
-
   font-size: 13px;
-
   color: var(--text-dim);
-
   line-height: 1.6;
-
 }
 
 .cl-note b {
-
   font-family: var(--font-num);
-
   color: var(--text);
-
   font-weight: 600;
-
 }
 
 /* =========================================================
-
    Funnel — 4-stage (Rev → GP → OP → NP)
-
    Hybrid: fill-behind + inline badge + leak pill/band
-
    ========================================================= */
-
 .funnel {
-
   display: flex;
-
   flex-direction: column;
-
   gap: 4px;
-
 }
 
 .tier {
-
   position: relative;
-
   height: 56px;
-
   background: var(--panel-2);
-
   border: 1px solid var(--line);
-
   border-radius: 10px;
-
   padding: 0 18px;
-
   display: flex;
-
   align-items: center;
-
   overflow: hidden;
-
 }
 
 .tier-fill {
-
   position: absolute;
-
   left: 0;
-
   top: 0;
-
   bottom: 0;
-
   z-index: 1;
-
   border-right: 1px solid var(--brass-line);
-
   background: linear-gradient(90deg, rgba(212, 165, 116, 0.28) 0%, rgba(212, 165, 116, 0.12) 100%);
-
   transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-
 }
 
 .tier.tier-np .tier-fill {
-
   background: linear-gradient(90deg, rgba(212, 165, 116, 0.42) 0%, rgba(212, 165, 116, 0.2) 100%);
-
   border-right-color: var(--brass);
-
   box-shadow: inset 0 0 20px rgba(212, 165, 116, 0.08);
-
 }
 
 .tier-content {
-
   position: relative;
-
   z-index: 2;
-
   width: 100%;
-
   display: flex;
-
   justify-content: space-between;
-
   align-items: center;
-
   gap: 12px;
-
 }
 
 .tier-label {
-
   display: flex;
-
   flex-direction: column;
-
   gap: 2px;
-
 }
 
 .tier-name {
-
   font-size: 14px;
-
   font-weight: 600;
-
   color: var(--text);
-
   line-height: 1.2;
-
 }
 
 .tier-sub {
-
   font-size: 10.5px;
-
   color: var(--text-muted);
-
   font-family: var(--font-num);
-
   letter-spacing: 0.02em;
-
 }
 
 .tier-right {
-
   display: flex;
-
   align-items: center;
-
   gap: 12px;
-
 }
 
 .tier-badge {
-
   padding: 3px 8px;
-
   border-radius: 4px;
-
   font-family: var(--font-num);
-
   font-size: 11px;
-
   font-weight: 600;
-
   white-space: nowrap;
-
 }
 
 .tier-badge.good  { background: var(--mint-dim);  color: var(--mint);  }
-
 .tier-badge.warn  { background: var(--amber-dim); color: var(--amber); }
-
 .tier-badge.bad   { background: var(--coral-dim); color: var(--coral); }
-
 .tier-badge.brass { background: var(--brass-dim); color: var(--brass); }
 
 .tier-val {
-
   font-family: var(--font-num);
-
   font-size: 17px;
-
   font-weight: 600;
-
   color: var(--text);
-
   letter-spacing: -0.015em;
-
   min-width: 108px;
-
   text-align: right;
-
 }
 
 .tier-val .u {
-
   font-size: 10.5px;
-
   color: var(--text-muted);
-
   font-weight: 400;
-
   margin-left: 3px;
-
 }
 
 /* Leakage band — between tiers */
-
 .leak {
-
   display: grid;
-
   grid-template-columns: 118px 1fr auto;
-
   gap: 10px;
-
   align-items: center;
-
   padding: 3px 0;
-
   min-height: 28px;
-
 }
 
 .leak-pill {
-
   justify-self: end;
-
   display: inline-flex;
-
   align-items: center;
-
   gap: 5px;
-
   padding: 4px 10px;
-
   border-radius: 999px;
-
   border: 1px solid var(--line-2);
-
   background: var(--panel-2);
-
   font-size: 11px;
-
   color: var(--text-dim);
-
   white-space: nowrap;
-
   font-weight: 500;
-
 }
 
 .leak-pill b {
-
   font-family: var(--font-num);
-
   font-weight: 600;
-
   font-size: 11.5px;
-
   color: var(--text);
-
 }
 
 .leak-pill.good { border-color: var(--mint-line); color: var(--mint); }
-
 .leak-pill.good b { color: var(--mint); }
-
 .leak-pill.warn { border-color: var(--amber-line); color: var(--amber); }
-
 .leak-pill.warn b { color: var(--amber); }
-
 .leak-pill.bad  { border-color: var(--coral-line); color: var(--coral); }
-
 .leak-pill.bad b  { color: var(--coral); }
 
 .leak-band {
-
   height: 22px;
-
   border-radius: 4px;
-
   border-left: 2px solid var(--coral-line);
-
   border-right: 2px solid rgba(248, 113, 113, 0.2);
-
   background-image: repeating-linear-gradient(
-
     -45deg,
-
     rgba(248, 113, 113, 0.16) 0px,
-
     rgba(248, 113, 113, 0.16) 5px,
-
     rgba(248, 113, 113, 0.035) 5px,
-
     rgba(248, 113, 113, 0.035) 10px
-
   );
-
   display: flex;
-
   align-items: center;
-
   justify-content: space-between;
-
   padding: 0 12px;
-
   overflow: hidden;
-
 }
 
 .leak-band .lbl {
-
   font-size: 11px;
-
   color: var(--coral);
-
   font-weight: 500;
-
 }
 
 .leak-band .amt {
-
   font-family: var(--font-num);
-
   font-size: 11.5px;
-
   color: var(--coral);
-
   font-weight: 600;
-
   white-space: nowrap;
-
 }
 
 .leak-note {
-
   font-size: 10px;
-
   color: var(--text-muted);
-
   white-space: nowrap;
-
   font-family: var(--font-num);
-
   letter-spacing: 0.02em;
-
 }
 
 @media (max-width: 640px) {
-
   .leak { grid-template-columns: 96px 1fr; }
-
   .leak-note { display: none; }
-
   .tier-val { font-size: 15px; min-width: 72px; }
-
   .tier-name { font-size: 13px; }
-
   .tier-badge { font-size: 10px; padding: 2px 6px; }
-
 }
 
 /* =========================================================
-
    Quality gauge — 4 KPIs with health-based glow
-
    ========================================================= */
-
 .gauges {
-
   display: grid;
-
   grid-template-columns: repeat(2, 1fr);
-
   gap: 12px;
-
 }
 
 @media (min-width: 560px) {
-
   .gauges { grid-template-columns: repeat(4, 1fr); }
-
 }
 
 .gauge {
-
   background: var(--panel-2);
-
   border: 1px solid var(--line);
-
   border-radius: 10px;
-
   padding: 14px 16px;
-
   display: flex;
-
   flex-direction: column;
-
   gap: 8px;
-
 }
 
 .gauge-head {
-
   display: flex;
-
   justify-content: space-between;
-
   align-items: baseline;
-
 }
 
 .gauge-name { font-size: 12px; color: var(--text-dim); }
 
 .gauge-delta {
-
   font-family: var(--font-num);
-
   font-size: 11px;
-
   color: var(--text-muted);
-
 }
 
 .gauge-delta.up { color: var(--mint); }
-
 .gauge-delta.down { color: var(--coral); }
 
 .gauge-val {
-
   font-family: var(--font-num);
-
   font-size: 22px;
-
   font-weight: 600;
-
   letter-spacing: -0.02em;
-
   line-height: 1;
-
 }
 
 .gauge-val .u {
-
   font-size: 11px;
-
   font-weight: 400;
-
   color: var(--text-muted);
-
   margin-left: 2px;
-
 }
 
 .gauge-track {
-
   height: 4px;
-
   background: var(--line);
-
   border-radius: 999px;
-
   overflow: hidden;
-
   margin-top: 2px;
-
 }
 
 .gauge-fill {
-
   height: 100%;
-
   border-radius: 999px;
-
   transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-
 }
 
 .gauge.good .gauge-val { color: var(--mint); }
-
 .gauge.good .gauge-fill { background: var(--mint); box-shadow: 0 0 8px rgba(94, 234, 212, 0.5); }
-
 .gauge.warn .gauge-val { color: var(--amber); }
-
 .gauge.warn .gauge-fill { background: var(--amber); box-shadow: 0 0 8px rgba(251, 191, 36, 0.4); }
-
 .gauge.bad  .gauge-val { color: var(--coral); }
-
 .gauge.bad  .gauge-fill { background: var(--coral); box-shadow: 0 0 8px rgba(248, 113, 113, 0.4); }
 
 /* =========================================================
-
    Insights
-
    ========================================================= */
-
 .insights { display: flex; flex-direction: column; gap: 10px; }
 
 .insight {
-
   padding: 12px 14px;
-
   background: var(--panel-2);
-
   border-left: 3px solid var(--brass);
-
   border-radius: 0 8px 8px 0;
-
   display: flex;
-
   gap: 12px;
-
   font-size: 13px;
-
   line-height: 1.6;
-
   color: var(--text-dim);
-
 }
 
 .insight.good { border-left-color: var(--mint); }
-
 .insight.warn { border-left-color: var(--amber); }
-
 .insight.bad  { border-left-color: var(--coral); }
 
 .insight-idx {
-
   font-family: var(--font-num);
-
   font-size: 11px;
-
   color: var(--text-muted);
-
   font-weight: 600;
-
   padding-top: 2px;
-
   letter-spacing: 0.05em;
-
   flex-shrink: 0;
-
 }
 
 .insight-body strong {
-
   font-family: var(--font-num);
-
   color: var(--text);
-
   font-weight: 600;
-
   padding: 0 2px;
-
 }
 
 .insight-body em {
-
   font-style: normal;
-
   display: block;
-
   color: var(--text-muted);
-
   font-size: 11.5px;
-
   margin-top: 3px;
-
 }
 
 /* =========================================================
-
    Charts
-
    ========================================================= */
-
 .chart-box {
-
   position: relative;
-
   height: 240px;
-
 }
 
 .chart-legend {
-
   display: flex;
-
   gap: 18px;
-
   margin-bottom: 12px;
-
   font-size: 12px;
-
   flex-wrap: wrap;
-
 }
 
 .chart-legend .item {
-
   display: inline-flex;
-
   align-items: center;
-
   gap: 6px;
-
   color: var(--text-dim);
-
 }
 
 .chart-legend .item::before {
-
   content: "";
-
   width: 12px;
-
   height: 2px;
-
   border-radius: 1px;
-
   background: currentColor;
-
 }
 
 .legend-brass { color: var(--brass); }
-
 .legend-mint  { color: var(--mint);  }
-
 .legend-amber { color: var(--amber); }
-
 .legend-dim   { color: var(--text-dim); }
 
 .chart-annot {
-
   margin-top: 10px;
-
   padding-top: 10px;
-
   border-top: 1px dashed var(--line);
-
   display: flex;
-
   gap: 16px;
-
   font-size: 11px;
-
   color: var(--text-muted);
-
   flex-wrap: wrap;
-
 }
 
 .chart-annot .item {
-
   display: inline-flex;
-
   align-items: center;
-
   gap: 6px;
-
 }
 
 .chart-annot .dot {
-
   width: 8px;
-
   height: 8px;
-
   border-radius: 50%;
-
   display: inline-block;
-
 }
 
 .chart-annot .dot.golden { background: var(--mint); box-shadow: 0 0 5px var(--mint); }
-
 .chart-annot .dot.death  { background: var(--coral); box-shadow: 0 0 5px var(--coral); }
 
 /* =========================================================
-
    Data table
-
    ========================================================= */
-
 .view-tabs {
-
   display: inline-flex;
-
   padding: 3px;
-
   background: var(--panel-2);
-
   border: 1px solid var(--line);
-
   border-radius: 8px;
-
 }
 
 .view-tabs button {
-
   padding: 5px 11px;
-
   border-radius: 5px;
-
   font-size: 12px;
-
   color: var(--text-dim);
-
   transition: color 0.15s;
-
 }
 
 .view-tabs button.active {
-
   background: var(--brass-dim);
-
   color: var(--brass);
-
   font-weight: 500;
-
 }
 
 .view-tabs button:hover:not(.active) { color: var(--text); }
 
 .table-wrap {
-
   overflow-x: auto;
-
   margin: 0 -24px;
-
   padding: 0 24px;
-
 }
 
 table.data {
-
   width: 100%;
-
   min-width: 640px;
-
   border-collapse: collapse;
-
   font-family: var(--font-num);
-
   font-size: 12.5px;
-
 }
 
 table.data thead th {
-
   text-align: right;
-
   padding: 10px 12px;
-
   color: var(--text-muted);
-
   font-weight: 500;
-
   font-size: 13px;
-
   letter-spacing: 0.05em;
-
   border-bottom: 1px solid var(--line);
-
   white-space: nowrap;
-
   cursor: pointer;
-
   user-select: none;
-
   transition: color 0.15s;
-
   background: rgba(28, 33, 48, 0.3);
-
 }
 
 table.data thead th:first-child { text-align: left; }
-
 table.data thead th:hover { color: var(--text); }
 
 .col-unit {
-
   font-size: 11px;
-
   color: var(--text-muted);
-
   font-weight: 400;
-
   margin-left: 3px;
-
   font-family: var(--font-num);
-
 }
 
 table.data thead th.sort-asc::after,
-
 table.data thead th.sort-desc::after {
-
   content: "";
-
   display: inline-block;
-
   margin-left: 5px;
-
   border-left: 4px solid transparent;
-
   border-right: 4px solid transparent;
-
   vertical-align: middle;
-
 }
-
 table.data thead th.sort-asc::after  { border-bottom: 5px solid var(--brass); }
-
 table.data thead th.sort-desc::after { border-top: 5px solid var(--brass); }
 
 table.data tbody td {
-
   text-align: right;
-
   padding: 11px 12px;
-
   border-bottom: 1px solid var(--line-soft);
-
   color: var(--text);
-
   white-space: nowrap;
-
 }
 
 table.data tbody td:first-child {
-
   text-align: left;
-
   color: var(--text-dim);
-
 }
 
 table.data tbody tr {
-
   cursor: pointer;
-
   transition: background 0.12s;
-
 }
 
 table.data tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
 
 table.data tbody tr.selected {
-
   background: var(--brass-dim);
-
 }
-
 table.data tbody tr.selected td {
-
   color: var(--brass);
-
   font-weight: 600;
-
 }
 
 table.data .growth-selected {
-
   color: var(--mint);
-
   background: var(--mint-dim);
-
 }
 
 .val-pos { color: var(--mint); }
-
 .val-neg { color: var(--coral); }
 
 .meta-strip {
-
   display: flex;
-
   justify-content: space-between;
-
   padding: 12px 0;
-
   font-size: 10.5px;
-
   color: var(--text-muted);
-
   font-family: var(--font-num);
-
   letter-spacing: 0.05em;
-
   flex-wrap: wrap;
-
   gap: 8px;
-
 }
 
 /* =========================================================
-
    v2 incremental additions
-
    ========================================================= */
-
 .section-title,
-
 [data-tooltip] {
-
   position: relative;
-
 }
 
 [data-tooltip]:focus-visible,
-
 button:focus-visible,
-
 th:focus-visible,
-
 tr:focus-visible {
-
   outline: 2px solid var(--brass);
-
   outline-offset: 3px;
-
 }
 
 .tooltip-float {
-
   position: fixed;
-
   z-index: 100;
-
   display: none;
-
   max-width: 280px;
-
   padding: 10px 12px;
-
   border: 1px solid var(--line-2);
-
   border-radius: 8px;
-
   background: var(--panel-3);
-
   color: var(--text);
-
   font-size: 14px;
-
   font-weight: 400;
-
   line-height: 1.5;
-
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-
   pointer-events: none;
-
 }
 
 .tooltip-float.show { display: block; }
 
 .chip[role="button"],
-
 .chip-button { cursor: pointer; }
 
 .chip-status { cursor: default; }
 
 .chip-button {
-
   position: relative;
-
   text-align: left;
-
 }
 
 .chip-popover {
-
   position: absolute;
-
   left: 0;
-
   top: calc(100% + 8px);
-
   z-index: 24;
-
   display: none;
-
   width: max-content;
-
   max-width: 290px;
-
   padding: 10px 12px;
-
   border: 1px solid var(--line-2);
-
   border-radius: 8px;
-
   background: var(--panel-3);
-
   color: var(--text);
-
   font-size: 12px;
-
   line-height: 1.55;
-
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
-
 }
 
 .chip-button.open .chip-popover { display: block; }
 
 .order-panel[hidden],
-
 .growth-tab[data-growth="cl"][hidden] { display: none; }
 
 .order-grid {
-
   display: grid;
-
   grid-template-columns: repeat(4, minmax(0, 1fr));
-
   gap: 12px;
-
 }
 
 .order-kpi {
-
   min-height: 116px;
-
   padding: 14px 16px;
-
   border: 1px solid var(--line);
-
   border-radius: 10px;
-
   background: var(--panel-2);
-
 }
 
 .order-kpi .label {
-
   margin-bottom: 9px;
-
   color: var(--text-muted);
-
   font-size: 11px;
-
   letter-spacing: 0.04em;
-
 }
 
 .order-kpi .value {
-
   color: var(--text);
-
   font-family: var(--font-num);
-
   font-size: 24px;
-
   font-weight: 600;
-
   line-height: 1.2;
-
 }
 
 .order-kpi.positive .value { color: var(--mint); }
-
 .order-kpi.negative .value { color: var(--coral); }
 
 .order-kpi .detail {
-
   margin-top: 7px;
-
   color: var(--text-dim);
-
   font-family: var(--font-num);
-
   font-size: 11px;
-
 }
 
 .cl-note { margin-top: 14px; }
 
 .card-tools {
-
   display: flex;
-
   align-items: center;
-
   gap: 10px;
-
   flex-wrap: wrap;
-
   justify-content: flex-end;
-
 }
 
 .growth-tabs {
-
   display: flex;
-
   gap: 6px;
-
   margin-bottom: 18px;
-
   overflow-x: auto;
-
   padding-bottom: 2px;
-
 }
 
 .growth-tab {
-
   flex: 0 0 auto;
-
   padding: 7px 11px;
-
   border: 1px solid var(--line);
-
   border-radius: 8px;
-
   color: var(--text-dim);
-
   background: var(--panel-2);
-
   font-size: 12px;
-
 }
 
 .growth-tab.active {
-
   color: var(--brass);
-
   border-color: var(--brass-line);
-
   background: var(--brass-dim);
-
 }
 
 .growth-main {
-
   display: grid;
-
   grid-template-columns: 220px minmax(0, 1fr);
-
   gap: 24px;
-
   align-items: stretch;
-
 }
 
 .growth-stats {
-
   display: flex;
-
   flex-direction: column;
-
   border-right: 1px solid var(--line);
-
   padding-right: 24px;
-
 }
 
 .growth-stat {
-
   padding: 12px 0;
-
   border-bottom: 1px dashed var(--line-soft);
-
 }
 
 .growth-stat:last-child { border-bottom: 0; }
 
 .growth-stat .label {
-
   color: var(--text-muted);
-
   font-size: 11px;
-
   margin-bottom: 5px;
-
 }
 
 .growth-stat .value {
-
   color: var(--text);
-
   font-family: var(--font-num);
-
   font-size: 18px;
-
   font-weight: 600;
-
 }
 
 .growth-stat .value.positive { color: var(--mint); }
-
 .growth-stat .value.negative { color: var(--coral); }
 
 .growth-chart-box {
-
   position: relative;
-
   min-height: 270px;
-
 }
 
 .growth-table { margin-top: 18px; }
 
 .period-toggle,
-
 .metric-toggle {
-
   display: inline-flex;
-
   padding: 3px;
-
   border: 1px solid var(--line);
-
   border-radius: 8px;
-
   background: var(--panel-2);
-
 }
 
 .period-toggle button,
-
 .metric-toggle button {
-
   padding: 5px 11px;
-
   border-radius: 5px;
-
   color: var(--text-dim);
-
   font-size: 12px;
-
 }
 
 .period-toggle button.active,
-
 .metric-toggle button.active {
-
   color: var(--brass);
-
   background: var(--brass-dim);
-
 }
 
 .ma-legends {
-
   display: flex;
-
   gap: 10px;
-
   margin-bottom: 12px;
-
   flex-wrap: wrap;
-
 }
 
 .ma-toggle {
-
   display: inline-flex;
-
   align-items: center;
-
   gap: 7px;
-
   padding: 5px 8px;
-
   border: 1px solid var(--line);
-
   border-radius: 6px;
-
   color: var(--text-dim);
-
   font-size: 12px;
-
 }
 
 .ma-toggle .swatch {
-
   width: 13px;
-
   height: 3px;
-
   border-radius: 2px;
-
   background: currentColor;
-
 }
 
 .ma-toggle.hidden-line { text-decoration: line-through; }
-
 .ma-toggle.hidden-line .swatch { opacity: 0.3; }
-
 .ma-toggle:disabled { color: var(--text-muted); cursor: default; opacity: 0.55; }
-
 .ma3 { color: var(--brass); }
-
 .ma6 { color: var(--amber); }
-
 .ma12 { color: var(--text-dim); }
 
 .chart-box-large { height: 300px; }
 
 table.data th[aria-sort="ascending"]::after,
-
 table.data th[aria-sort="descending"]::after {
-
   content: "";
-
   display: inline-block;
-
   margin-left: 5px;
-
   border-left: 4px solid transparent;
-
   border-right: 4px solid transparent;
-
   vertical-align: middle;
-
 }
 
 table.data th[aria-sort="ascending"]::after { border-bottom: 5px solid var(--brass); }
-
 table.data th[aria-sort="descending"]::after { border-top: 5px solid var(--brass); }
 
 @media (max-width: 900px) {
-
   .order-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
   .growth-main { grid-template-columns: 1fr; }
-
   .growth-stats {
-
     display: grid;
-
     grid-template-columns: repeat(4, minmax(0, 1fr));
-
     gap: 12px;
-
     border-right: 0;
-
     border-bottom: 1px solid var(--line);
-
     padding-right: 0;
-
     padding-bottom: 16px;
-
   }
-
   .growth-stat { border-bottom: 0; }
-
 }
 
 @media (max-width: 640px) {
-
   .topbar { overflow-x: auto; }
-
   .brand { flex-shrink: 0; }
-
   .status-btn { padding: 0 9px; white-space: nowrap; }
-
   .stock-hero { align-items: flex-start; }
-
   .order-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
   .order-kpi { min-height: 108px; padding: 12px; }
-
   .order-kpi .value { font-size: 19px; }
-
   .growth-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
   .card { padding: 18px 16px; }
-
   .table-wrap { margin: 0 -16px; padding: 0 16px; }
-
   .card-head { flex-direction: column; }
-
   .card-tools { justify-content: flex-start; }
-
 }
-
 .status-panel { min-height: 46vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 60px 20px; text-align: center; color: var(--text-dim); }
-
 .status-panel h2 { font-size: 18px; color: var(--text); font-weight: 600; letter-spacing: -0.01em; }
-
 .status-panel p { max-width: 400px; line-height: 1.6; }
-
 .status-panel .btn { margin-top: 6px; }
-
 .status-icon { width: 44px; height: 44px; color: var(--brass); stroke-width: 1.8; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
-
 .status-icon-error { color: var(--coral); }
-
 .status-icon-notfound { color: var(--brass); }
-
 .loading-spinner { width: 34px; height: 34px; border: 3px solid var(--line); border-top-color: var(--brass); border-radius: 50%; animation: status-spin 850ms linear infinite; }
-
 @keyframes status-spin { to { transform: rotate(360deg); } }
-
 body[data-status="loading"] .wrap, body[data-status="notfound"] .wrap, body[data-status="error"] .wrap { display: none; }
-
 body[data-status="ok"] .status-panel { display: none; }
-
 @media (max-width: 640px) { .status-panel { min-height: 36vh; padding: 40px 16px; } .status-panel h2 { font-size: 16px; } .status-icon { width: 36px; height: 36px; } }
-
 </style>
-
 </head>
-
 <body>
-
 <header class="topbar">
-
   <div class="brand">
-
     <div class="brand-mark">F</div>
-
     <div class="brand-text">財報轉化漏斗<span class="sub">Financial Conversion Funnel</span></div>
-
   </div>
-
   <nav class="nav-tabs" aria-label="主要導覽">
-
     <button class="nav-tab">選股掃描</button>
-
     <button class="nav-tab active" aria-current="page">個股詳細</button>
-
   </nav>
-
   <div class="topbar-spacer"></div>
-
   <div class="search-box"><input type="text" aria-label="搜尋股號或名稱" placeholder="搜尋股號 / 名稱" value="6789"></div>
-
   <button class="status-btn" data-tooltip="資料日期:2026-08-22" aria-label="資料日期 2026-08-22"><span class="status-dot"></span><span>資料 2026-08-22</span></button>
-
 </header>
 
 <div class="status-panel" id="loadingPanel"><div class="loading-spinner" aria-label="載入中"></div><p>資料載入中…</p></div>
-
 <div class="status-panel" id="notFoundPanel" hidden>
-
   <svg viewBox="0 0 24 24" class="status-icon status-icon-notfound" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15 15 L20 20" /><path d="M7 10.5 L14 10.5" /></svg>
-
   <h2>找不到股票 <span id="missingStockId">—</span></h2>
-
   <p>此股票資料尚未建置，可能是新掛牌、暫停交易，或不在追蹤清單。</p>
-
   <a href="./scanner.html" class="btn primary" data-tooltip="回到選股掃描器">回到選股頁</a>
-
 </div>
-
 <div class="status-panel" id="errorPanel" hidden>
-
   <svg viewBox="0 0 24 24" class="status-icon status-icon-error" aria-hidden="true"><path d="M12 3 L22 20 L2 20 Z" /><path d="M12 10 L12 14" /><circle cx="12" cy="17" r="0.5" fill="currentColor" /></svg>
-
   <h2>資料載入失敗</h2>
-
   <p id="errorDetail">請檢查網路連線後重試。若問題持續，可能是後端資料尚未部署。</p>
-
   <button type="button" class="btn primary" id="retryBtn" data-tooltip="重新載入頁面">重新載入</button>
-
 </div>
 
 <main class="wrap">
-
   <div class="stock-hero">
-
     <div class="hero-left">
-
       <div class="hero-crumb">TWSE · 系統整合</div>
-
       <div class="hero-title"><span class="hero-id">6789</span><span class="hero-name">示範系統</span></div>
-
       <div class="hero-chips">
-
         <button class="chip chip-button" id="industryChip" data-tooltip="點擊查看同產業其他個股" aria-label="系統整合，點擊查看同產業其他個股">系統整合</button>
-
         <span class="chip chip-good chip-status" id="clChip" data-tooltip="本公司合約負債占營收比例 >15%,適合以訂單能見度分析" tabindex="0">含合約負債</span>
-
         <button class="chip chip-button" id="reportChip" data-tooltip="本季財報公布日:2026-08-14 · 資料來源:公開資訊觀測站" aria-expanded="false">最新財報 2026/2Q<span class="chip-popover">財報公布日:2026-08-14<br>資料來源:公開資訊觀測站</span></button>
-
         <button class="chip chip-button" id="monthlyChip" data-tooltip="本月營收公布日:2026-09-10 · 資料來源:公開資訊觀測站" aria-expanded="false">最新月營收 2026-08<span class="chip-popover">本月營收公布日:2026-09-10<br>資料來源:公開資訊觀測站</span></button>
-
       </div>
-
     </div>
-
     <div class="hero-right">
-
       <button class="q-picker" id="qPicker" aria-label="循環切換季度"><span id="qPickerLabel">2026/2Q</span><span class="caret">▼</span></button>
-
     </div>
-
   </div>
 
   <section class="card order-panel" id="orderPanel" tabindex="-1">
-
     <div class="card-head">
-
       <div><h3 class="section-title" tabindex="0" data-tooltip="合約負債水位面板。合約負債是公司預收但尚未認列為營收的部分,水位高低反映未來營收動能是否有支撐。">訂單能見度</h3><p>合約負債水位與認列速度</p></div>
-
       <span class="unit" id="clCardUnit">單位：百萬</span>
-
     </div>
-
     <div class="order-grid" id="clStats"></div>
-
     <div class="cl-note" id="clNote"></div>
-
   </section>
 
   <section class="card">
-
     <div class="card-head">
-
       <div><h3 class="section-title" tabindex="0" data-tooltip="當季營收如何一路轉化為稅後淨利。每段之間的斜紋帶顯示該層的損耗來源(成本、費用、業外+稅)。合約負債不在漏斗鏈內。">營收轉換漏斗</h3><p id="funnelSub">2026/2Q · 4 段轉化</p></div>
-
       <span class="unit" id="funnelUnit">單位：百萬</span>
-
     </div>
-
     <div class="funnel" id="funnel"></div>
-
   </section>
 
   <div class="two-col">
-
     <section class="card">
-
       <div class="card-head"><div><h3 class="section-title" tabindex="0" data-tooltip="四個當季比率指標,反映本季獲利品質。與上一季比較(QoQ)。">品質儀表</h3><p>四項獲利品質 · QoQ 變化</p></div></div>
-
       <div class="gauges" id="gauges"></div>
-
     </section>
-
     <section class="card">
-
       <div class="card-head"><div><h3 class="section-title" tabindex="0" data-tooltip="依當季數字自動生成的 1-4 條判讀。左邊框顏色代表健康度。">自動判讀</h3><p>依當季數字生成</p></div></div>
-
       <div class="insights" id="insights"></div>
-
     </section>
-
   </div>
 
   <section class="card" id="growthCard">
-
     <div class="card-head">
-
       <div><h3 class="section-title" tabindex="0" data-tooltip="六個財務項目的成長率趨勢。可切換 YoY 年增率或 QoQ 季增率。">成長率分析</h3><p>YoY / QoQ 動態切換</p></div>
-
       <div class="metric-toggle" id="growthMetric" aria-label="成長率切換"><button class="active" data-mode="yoy">YoY</button><button data-mode="qoq">QoQ</button></div>
-
     </div>
-
     <div class="growth-tabs" id="growthTabs">
-
       <button class="growth-tab active" data-growth="rev" data-tooltip="相較去年同期或上一期的營業收入變化。">營收成長率</button>
-
       <button class="growth-tab" data-growth="gp" data-tooltip="營業毛利的 YoY 年增率與 QoQ 季增率趨勢。">毛利成長率</button>
-
       <button class="growth-tab" data-growth="op" data-tooltip="營業利益的 YoY 年增率與 QoQ 季增率趨勢。">營益成長率</button>
-
       <button class="growth-tab" data-growth="np" data-tooltip="稅後淨利的 YoY 年增率與 QoQ 季增率趨勢。">淨利成長率</button>
-
       <button class="growth-tab" data-growth="eps" data-tooltip="每股盈餘的 YoY 年增率與 QoQ 季增率趨勢。">EPS 成長率</button>
-
       <button class="growth-tab" data-growth="cl" data-tooltip="合約負債水位與季營業收入的八季對照。">合約負債-流動</button>
-
     </div>
-
     <div class="growth-main">
-
       <div class="growth-stats" id="growthStats"></div>
-
       <div class="growth-chart-box"><canvas id="growthChart"></canvas></div>
-
     </div>
-
     <div class="table-wrap growth-table"><table class="data" id="growthData"><thead id="growthHead"></thead><tbody id="growthBody"></tbody></table></div>
-
   </section>
 
   <section class="card">
-
     <div class="card-head">
-
       <div><h3 class="section-title" tabindex="0" data-tooltip="月營收長期走勢與均線動能。M/Q/Y 切換資料顆粒度,三條均線可獨立顯示或隱藏。">月營收動能</h3><p>3/6/12 期均線與交叉標記</p></div>
-
       <div class="period-toggle" id="periodToggle" aria-label="資料顆粒度"><button class="active" data-period="M">M</button><button data-period="Q">Q</button><button data-period="Y">Y</button></div>
-
     </div>
-
     <div class="ma-legends" id="maLegends">
-
       <button class="ma-toggle ma3" data-ma="3" data-tooltip="近 3 個月營收的算術平均。反映短期動能。"><span class="swatch"></span><span>3 月均線</span></button>
-
       <button class="ma-toggle ma6" data-ma="6" data-tooltip="近 6 個月營收的算術平均。反映中期動能。"><span class="swatch"></span><span>6 月均線</span></button>
-
       <button class="ma-toggle ma12" data-ma="12" data-tooltip="近 12 個月營收的算術平均。反映長期趨勢。"><span class="swatch"></span><span>12 月均線</span></button>
-
     </div>
-
     <div class="chart-box chart-box-large"><canvas id="maChart"></canvas></div>
-
     <div class="chart-annot">
-
       <span class="item" tabindex="0" data-tooltip="短期均線由下往上穿過長期均線。代表動能轉正,通常視為多方訊號。"><span class="dot golden"></span>黃金交叉 · 動能轉正</span>
-
       <span class="item" tabindex="0" data-tooltip="短期均線由上往下穿過長期均線。代表動能轉負,通常視為空方訊號。"><span class="dot death"></span>死亡交叉 · 動能轉負</span>
-
     </div>
-
   </section>
 
   <section class="card">
-
     <div class="card-head">
-
       <div><h3 class="section-title" tabindex="0" data-tooltip="近 8 季完整財務資料。點列可切換上方所有動態區塊的顯示季度。金額單位標示在每欄標題後。">季度資料</h3><p>點列切換上方漏斗與合約負債面板</p></div>
-
       <div class="view-tabs" id="viewTabs"><button class="active" data-view="std">標準</button><button data-view="full">完整</button><button data-view="cl">合約負債明細</button><button data-view="growth">成長率</button></div>
-
     </div>
-
     <div class="table-wrap"><table class="data" id="dataTable"><thead id="dataHead"></thead><tbody id="dataBody"></tbody></table></div>
-
   </section>
 
   <div class="meta-strip"><span>資料架構 v2.1 · 產生時間 2026-08-22 14:00 台北時間</span><span>示範資料 · 未內嵌資料權杖</span></div>
-
 </main>
-
 <div class="tooltip-float" id="tooltipFloat" role="tooltip"></div>
 
 <script>
-
 let stock = null; let meta = null;
-
 class NotFoundError extends Error { constructor(id) { super(id); this.name = 'NotFoundError'; } }
-
 async function loadStock() {
-
   const params = new URLSearchParams(location.search);
-
   const stockId = params.get('id') || '2330';
-
   document.getElementById('missingStockId').textContent = stockId;
-
   const resp = await fetch(`./data/stocks/${stockId}.json`);
-
   if (resp.status === 404) throw new NotFoundError(stockId);
-
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
   stock = await resp.json();
-
 }
-
 async function loadMeta() {
-
   try { const resp = await fetch('./data/meta.json'); if (resp.ok) meta = await resp.json(); } catch {}
-
 }
-
 function setStatus(mode) {
-
   document.body.dataset.status = mode;
-
   document.getElementById('loadingPanel').hidden = mode !== 'loading';
-
   document.getElementById('notFoundPanel').hidden = mode !== 'notfound';
-
   document.getElementById('errorPanel').hidden = mode !== 'error';
-
 }
-
 function applyMetaToTopbar() {
-
   if (!meta || !meta.last_full_build) return;
-
   const date = String(meta.last_full_build).slice(0, 10);
-
   const label = document.querySelector('.status-btn span:last-child');
-
   if (label) label.textContent = `資料 ${date}`;
-
 }
-
 document.getElementById('retryBtn')?.addEventListener('click', () => location.reload());
 
 let state = null;
-
 let hasCL = false;
 
+
 /* =========================================================
-
    Formatters
-
    ========================================================= */
-
 const fmt = {
-
   int:  n => n == null ? '—' : Math.round(n).toLocaleString('en-US'),
-
   pct:  (n, d = 1) => n == null ? '—' : n.toFixed(d) + '%',
-
   pctS: (n, d = 1) => n == null ? '—' : (n >= 0 ? '+' : '−') + Math.abs(n).toFixed(d) + '%',
-
   eps:  n => n == null ? '—' : n.toFixed(2),
-
   vis:  n => n == null ? '—' : n.toFixed(1),
-
 };
 
 /* =========================================================
-
    Indicators
-
    ========================================================= */
-
 function indicators(q, prev) {
-
   const gm = q.rev ? (q.gp / q.rev) * 100 : null;
-
   const om = q.rev ? (q.op / q.rev) * 100 : null;
-
   const nm = q.rev ? (q.np / q.rev) * 100 : null;
-
   const landing = q.gp ? (q.op / q.gp) * 100 : null;
-
   const noiRatio = q.np ? (q.noi / q.np) * 100 : null;
-
   return { gm, om, nm, landing, noiRatio };
-
 }
 
 const health = {
-
   gm:      v => v == null ? '' : (v >= 25 ? 'good' : v >= 15 ? 'warn' : 'bad'),
-
   om:      v => v == null ? '' : (v >= 8  ? 'good' : v >= 3  ? 'warn' : 'bad'),
-
   nm:      v => v == null ? '' : (v >= 5  ? 'good' : v >= 0  ? 'warn' : 'bad'),
-
   landing: v => v == null ? '' : (v >= 40 ? 'good' : v >= 20 ? 'warn' : 'bad'),
-
   noi:     v => v == null ? '' : (Math.abs(v) < 25 ? 'good' : Math.abs(v) < 70 ? 'warn' : 'bad'),
-
   below:   v => v == null ? '' : (Math.abs(v) < 20 ? 'good' : Math.abs(v) <= 40 ? 'warn' : 'bad'),
-
   clYoy:   v => v == null ? '' : (v > 30 ? 'good' : v >= 0 ? 'warn' : 'bad'),
-
 };
 
+
 let clChart;
-
 function renderClChart() {
-
   const ctx = document.getElementById('clChart');
-
   const labels = stock.quarterly.map(q => q.q);
-
   const cls = stock.quarterly.map(q => q.cl);
-
   const revs = stock.quarterly.map(q => q.rev);
 
   if (clChart) clChart.destroy();
-
   clChart = new Chart(ctx, {
-
     data: {
-
       labels,
-
       datasets: [
-
         {
-
           type: 'bar',
-
           label: '合約負債',
-
           data: cls,
-
           backgroundColor: (ctx) => ctx.dataIndex === state.qIdx ? 'rgba(212, 165, 116, 0.9)' : 'rgba(212, 165, 116, 0.5)',
-
           borderColor: (ctx) => ctx.dataIndex === state.qIdx ? '#e6bd8f' : 'rgba(212, 165, 116, 0.7)',
-
           borderWidth: 1,
-
           borderRadius: 3,
-
           borderSkipped: false,
-
           yAxisID: 'y',
-
           barPercentage: 0.7,
-
           categoryPercentage: 0.8,
-
         },
-
         {
-
           type: 'line',
-
           label: '季營收',
-
           data: revs,
-
           borderColor: '#5eead4',
-
           backgroundColor: 'rgba(94, 234, 212, 0.06)',
-
           borderWidth: 2,
-
           tension: 0.3,
-
           pointRadius: (ctx) => ctx.dataIndex === state.qIdx ? 5 : 3,
-
           pointBackgroundColor: '#5eead4',
-
           pointBorderColor: '#0d0f14',
-
           pointBorderWidth: 1.5,
-
           yAxisID: 'y1',
-
           fill: false,
-
         }
-
       ]
-
     },
-
     options: {
-
       responsive: true,
-
       maintainAspectRatio: false,
-
       interaction: { mode: 'index', intersect: false },
-
       plugins: {
-
         legend: { display: false },
-
         tooltip: tooltipTheme(),
-
       },
-
       scales: {
-
         x: {
-
           grid: { display: false },
-
           border: { color: '#262c3d' },
-
           ticks: { color: '#5a6478', font: { family: 'JetBrains Mono', size: 10 } },
-
         },
-
         y: {
-
           position: 'left',
-
           grid: { color: 'rgba(38,44,61,0.5)' },
-
           border: { display: false },
-
           ticks: {
-
             color: '#d4a574',
-
             font: { family: 'JetBrains Mono', size: 10 },
-
             callback: v => (v / 1000).toFixed(1) + 'K',
-
           },
-
           title: { display: false },
-
         },
-
         y1: {
-
           position: 'right',
-
           grid: { drawOnChartArea: false },
-
           border: { display: false },
-
           ticks: {
-
             color: '#5eead4',
-
             font: { family: 'JetBrains Mono', size: 10 },
-
             callback: v => (v / 1000).toFixed(0) + 'K',
-
           },
-
         }
-
       }
-
     }
-
   });
-
 }
 
+
+
+
 /* =========================================================
-
    Charts — margin trend + MA
-
    ========================================================= */
-
 let marginChart, maChart;
 
 function tooltipTheme() {
-
   return {
-
     backgroundColor: '#232838',
-
     borderColor: '#303648',
-
     borderWidth: 1,
-
     titleColor: '#e8ecf2',
-
     bodyColor: '#e8ecf2',
-
     titleFont: { family: 'JetBrains Mono', size: 14 },
-
     bodyFont:  { family: 'JetBrains Mono', size: 14 },
-
     padding: 10,
-
     displayColors: true,
-
     boxWidth: 8,
-
     boxHeight: 8,
-
   };
-
 }
 
 function renderMarginChart() {
-
   const ctx = document.getElementById('marginChart');
-
   const labels = stock.quarterly.map(q => q.q);
-
   const gm = stock.quarterly.map(q => (q.gp / q.rev) * 100);
-
   const om = stock.quarterly.map(q => (q.op / q.rev) * 100);
-
   const nm = stock.quarterly.map(q => (q.np / q.rev) * 100);
 
   if (marginChart) marginChart.destroy();
-
   marginChart = new Chart(ctx, {
-
     type: 'line',
-
     data: {
-
       labels,
-
       datasets: [
-
         { label: '毛利率', data: gm, borderColor: '#d4a574', backgroundColor: 'rgba(212,165,116,0.08)', tension: 0.3, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5 },
-
         { label: '營益率', data: om, borderColor: '#5eead4', backgroundColor: 'rgba(94,234,212,0.06)', tension: 0.3, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5 },
-
         { label: '淨利率', data: nm, borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,0.06)', tension: 0.3, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5 },
-
       ],
-
     },
-
     options: {
-
       responsive: true,
-
       maintainAspectRatio: false,
-
       interaction: { mode: 'index', intersect: false },
-
       plugins: { legend: { display: false }, tooltip: {
-
         ...tooltipTheme(),
-
         callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` }
-
       }},
-
       scales: {
-
         x: { grid: { color: 'rgba(38,44,61,0.5)' }, border: { color: '#262c3d' }, ticks: { color: '#5a6478', font: { family: 'JetBrains Mono', size: 10 } } },
-
         y: { grid: { color: 'rgba(38,44,61,0.5)' }, border: { display: false }, ticks: { color: '#5a6478', font: { family: 'JetBrains Mono', size: 10 }, callback: v => v.toFixed(0) + '%' } },
-
       },
-
     },
-
   });
-
 }
 
 function computeMA(monthly, window) {
-
   const out = [];
-
   for (let i = 0; i < monthly.length; i++) {
-
     if (i < window - 1) { out.push(null); continue; }
-
     const sum = monthly.slice(i - window + 1, i + 1).reduce((a, b) => a + b[1], 0);
-
     out.push(sum / window);
-
   }
-
   return out;
-
 }
 
 function findCrosses(ma3, ma12) {
-
   const crosses = [];
-
   for (let i = 1; i < ma3.length; i++) {
-
     if (ma3[i - 1] == null || ma12[i - 1] == null || ma3[i] == null || ma12[i] == null) continue;
-
     const prev = ma3[i - 1] - ma12[i - 1];
-
     const curr = ma3[i] - ma12[i];
-
     if (prev <= 0 && curr > 0) crosses.push({ i, type: 'golden' });
-
     if (prev >= 0 && curr < 0) crosses.push({ i, type: 'death'  });
-
   }
-
   return crosses;
-
 }
 
+
 /* =========================================================
-
    Data table
-
    ========================================================= */
-
 const viewSchemas = {
-
   std: [
-
     { key: 'q',    label: '季度' },
-
     { key: 'rev',  label: '營收',    type: 'num' },
-
     { key: 'gm',   label: '毛利率', type: 'pct' },
-
     { key: 'om',   label: '營益率', type: 'pct' },
-
     { key: 'nm',   label: '淨利率', type: 'pct' },
-
     { key: 'eps',  label: 'EPS',    type: 'eps' },
-
   ],
-
   full: [
-
     { key: 'q',   label: '季度' },
-
     { key: 'rev', label: '營收',     type: 'num' },
-
     { key: 'gp',  label: '毛利',     type: 'num' },
-
     { key: 'op',  label: '營業利益', type: 'num' },
-
     { key: 'noi', label: '業外',     type: 'num' },
-
     { key: 'np',  label: '淨利',     type: 'num' },
-
     { key: 'eps', label: 'EPS',     type: 'eps' },
-
   ],
-
   cl: [
-
     { key: 'q',        label: '季度' },
-
     { key: 'cl',       label: '合約負債',     type: 'num' },
-
     { key: 'clYoY',    label: '合約負債年增率', type: 'pctSigned' },
-
     { key: 'clQoQ',    label: '合約負債季增率', type: 'pctSigned' },
-
     { key: 'rev',      label: '季營收',       type: 'num' },
-
     { key: 'clRevPct', label: '合約負債占季營收比', type: 'pct' },
-
     { key: 'vis',      label: '能見度(月)',   type: 'mo' },
-
   ],
-
   yoy: [
-
     { key: 'q',      label: '季度' },
-
     { key: 'revYoY', label: '營收YoY', type: 'pctSigned' },
-
     { key: 'gpYoY',  label: '毛利YoY', type: 'pctSigned' },
-
     { key: 'opYoY',  label: '營益YoY', type: 'pctSigned' },
-
     { key: 'npYoY',  label: '淨利YoY', type: 'pctSigned' },
-
     { key: 'clYoY',  label: '合約負債年增率', type: 'pctSigned' },
-
   ],
-
 };
 
 function computeTableRows() {
-
   return stock.quarterly.map((q, i) => {
-
     const py = i >= 4 ? stock.quarterly[i - 4] : null;
-
     const pq = i > 0 ? stock.quarterly[i - 1] : null;
-
     const gm = (q.gp / q.rev) * 100;
-
     const om = (q.op / q.rev) * 100;
-
     const nm = (q.np / q.rev) * 100;
-
     const yoy = (curr, prev) => (prev != null) ? ((curr / prev) - 1) * 100 : null;
-
     const qoq = (curr, prev) => (prev != null) ? ((curr / prev) - 1) * 100 : null;
 
     // Visibility for this quarter
-
     const monthOffset = (stock.quarterly.length - 1 - i) * 3;
-
     const last3 = stock.monthly.slice(-3 - monthOffset, stock.monthly.length - monthOffset);
-
     const avgMonthly = last3.length ? last3.reduce((a, b) => a + b[1], 0) / last3.length : null;
-
     const vis = avgMonthly ? q.cl / avgMonthly : null;
 
     return {
-
       idx: i,
-
       q: q.q,
-
       cl: q.cl, rev: q.rev, gp: q.gp, op: q.op, noi: q.noi, np: q.np, eps: q.eps,
-
       gm, om, nm,
-
       revYoY: yoy(q.rev, py?.rev),
-
       gpYoY:  yoy(q.gp,  py?.gp),
-
       opYoY:  yoy(q.op,  py?.op),
-
       npYoY:  yoy(q.np,  py?.np),
-
       clYoY:  yoy(q.cl,  py?.cl),
-
       clQoQ:  qoq(q.cl,  pq?.cl),
-
       clRevPct: (q.cl / q.rev) * 100,
-
       vis,
-
     };
-
   });
-
 }
 
 function fmtCell(val, type) {
-
   if (val == null) return { text: '—', cls: '' };
-
   if (type === 'num') return { text: fmt.int(val), cls: '' };
-
   if (type === 'pct') return { text: fmt.pct(val), cls: '' };
-
   if (type === 'pctSigned') return { text: fmt.pctS(val), cls: val > 0 ? 'val-pos' : val < 0 ? 'val-neg' : '' };
-
   if (type === 'eps') return { text: fmt.eps(val), cls: '' };
-
   if (type === 'mo')  return { text: val.toFixed(1), cls: '' };
-
   return { text: String(val), cls: '' };
-
 }
 
+
 /* =========================================================
-
    v2 helpers and incremental render overrides
-
    ========================================================= */
-
 const tooltips = {
-
   cl: '公司預收但尚未認列為營收的部分。屬未來營收的燃料,通常在 1–2 年內分批認列,不是本季一定會全部消化。',
-
   yoy: '相較去年同期的變化百分比。反映長期趨勢。',
-
   qoq: '相較上一季的變化百分比。反映短期動能。',
-
   visibility: '合約負債 ÷ 該季 3 個月平均月營收 = 未來能見的月數。>3 個月為長訂單能見度、1–3 個月為一般、<1 個月為短期能見度。',
-
   clRev: '合約負債 ÷ 當季營收 × 100%。>50% 通常代表訂單充足。',
-
   rev: '本季已認列的營收總額。轉換漏斗的起點。',
-
   gp: '營業收入 − 營業成本。反映產品定價力與成本控制。',
-
   cogs: '生產或採購的直接成本。',
-
   op: '營業毛利 − 營業費用。反映本業獲利能力,是判斷公司體質最重要的數字。',
-
   opex: '銷售、管理、研發等費用。',
-
   noi: '本業以外的收入或支出(如匯兌、利息、投資損益)。',
-
   np: '營業利益 ± 業外收支 − 所得稅。對外公告的最終獲利數字,EPS 由此計算。',
-
   gm: '毛利 ÷ 營收。反映產品定價力與成本控制。三率中最貼近公司本業體質。≥25% 綠 / 15–25% 黃 / <15% 紅。',
-
   om: '營業利益 ÷ 營收。反映本業獲利能力。≥8% 綠 / 3–8% 黃 / <3% 紅。',
-
   nm: '稅後淨利 ÷ 營收。反映最終獲利效率。≥5% 綠 / 0–5% 黃 / <0% 紅。',
-
   landing: '營業利益 ÷ 毛利。反映毛利被費用吃掉多少。≥40% 綠 / 20–40% 黃 / <20% 紅。',
-
   noiRatio: '業外收支 ÷ 稅後淨利。反映淨利中有多少來自本業以外。絕對值 <25% 為健康、>70% 需警覺。',
-
   below: '營業利益 − 稅後淨利。反映本業以下的損益貢獻。',
-
   eps: '每股盈餘,稅後淨利 ÷ 加權平均股數。單位：元。',
-
 };
 
 const esc = value => String(value).replace(/[&<>"']/g, ch => ({
-
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-
 }[ch]));
-
 const tipAttr = text => `data-tooltip="${esc(text)}" tabindex="0"`;
-
 const THRESHOLD_TO_YI = 50000;
 
 function pickUnit(maxValue) {
-
   if (maxValue == null) return { unit: '百萬', divisor: 1, decimals: 0 };
-
   if (Math.abs(maxValue) >= THRESHOLD_TO_YI) return { unit: '億', divisor: 100, decimals: 2 };
-
   return { unit: '百萬', divisor: 1, decimals: 0 };
-
 }
 
 function formatMoney(value, unitInfo) {
-
   if (value == null) return '—';
-
   const scaled = value / unitInfo.divisor;
-
   if (unitInfo.decimals === 0) return Math.round(scaled).toLocaleString('en-US');
-
   return scaled.toLocaleString('en-US', {
-
     minimumFractionDigits: unitInfo.decimals,
-
     maximumFractionDigits: unitInfo.decimals,
-
   });
-
 }
 
 function formatMoneySigned(value, unitInfo) {
-
   if (value == null) return '—';
-
   const sign = value >= 0 ? '+' : '−';
-
   return sign + formatMoney(Math.abs(value), unitInfo);
-
 }
 
 function moneyWithUnit(value, unitInfo) {
-
   return value == null ? '—' : `${formatMoney(value, unitInfo)} ${unitInfo.unit}`;
-
 }
 
 function maxAbs(values) {
-
   const valid = values.filter(value => value != null).map(value => Math.abs(value));
-
   return valid.length ? Math.max(...valid) : null;
-
 }
 
 function formatAxisMoney(value, unitInfo) {
-
   if (unitInfo.unit === '億') return Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 });
-
   if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(Math.abs(value) >= 10000 ? 0 : 1)}K`;
-
   return Math.round(value).toLocaleString('en-US');
-
 }
-
 const rate = (current, base) => base == null || base === 0 ? null : (current / base - 1) * 100;
 
 function quarterMonths(label) {
-
   const match = label.match(/^(\d{4})\/(\d)Q$/);
-
   if (!match) return [];
-
   const year = Number(match[1]);
-
   const quarter = Number(match[2]);
-
   const start = (quarter - 1) * 3 + 1;
-
   return [0, 1, 2].map(offset => `${year}-${String(start + offset).padStart(2, '0')}`);
-
 }
 
 function visibilityForQuarter(index) {
-
   const q = stock.quarterly[index];
-
   const wanted = new Set(quarterMonths(q.q));
-
   const values = stock.monthly.filter(row => wanted.has(row[0])).map(row => row[1]);
-
   const avg = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
-
   return avg ? q.cl / avg : null;
-
 }
 
 function quarterRow(index) {
-
   const q = stock.quarterly[index];
-
   const prev = index > 0 ? stock.quarterly[index - 1] : null;
-
   const py = index >= 4 ? stock.quarterly[index - 4] : null;
-
   const ind = indicators(q);
-
   return {
-
     idx: index, ...q, ...ind,
-
     revYoY: rate(q.rev, py?.rev), revQoQ: rate(q.rev, prev?.rev),
-
     gpYoY: rate(q.gp, py?.gp), gpQoQ: rate(q.gp, prev?.gp),
-
     opYoY: rate(q.op, py?.op), opQoQ: rate(q.op, prev?.op),
-
     npYoY: rate(q.np, py?.np), npQoQ: rate(q.np, prev?.np),
-
     epsYoY: rate(q.eps, py?.eps), epsQoQ: rate(q.eps, prev?.eps),
-
     clYoY: rate(q.cl, py?.cl), clQoQ: rate(q.cl, prev?.cl),
-
     clRevPct: q.cl / q.rev * 100,
-
     vis: visibilityForQuarter(index),
-
   };
-
 }
 
 function renderClStats() {
-
   const row = quarterRow(state.qIdx);
-
   const unitInfo = pickUnit(row.cl);
-
   document.getElementById('clCardUnit').textContent = `單位：${unitInfo.unit}`;
-
   const yoyClass = row.clYoY == null ? '' : row.clYoY >= 0 ? 'positive' : 'negative';
-
   const qoqClass = row.clQoQ == null ? '' : row.clQoQ >= 0 ? 'positive' : 'negative';
-
   const items = [
-
     { label: '合約負債期末', value: formatMoney(row.cl, unitInfo), tip: tooltips.cl, cardTip: '公司預收但尚未認列為營收的部分。屬未來營收的燃料,通常在 1–2 年內分批認列,不是本季一定會全部消化。' },
-
     { label: 'YoY 年增率', value: fmt.pctS(row.clYoY), cls: yoyClass, tip: tooltips.yoy, cardTip: '合約負債相較去年同期的變化。反映訂單池是否累積。>30% 為強勁累積、<0% 為訂單轉弱。' },
-
     { label: 'QoQ 季增率', value: fmt.pctS(row.clQoQ), cls: qoqClass, tip: tooltips.qoq, cardTip: '合約負債相較上一季的變化。反映短期訂單動能。' },
-
     { label: '訂單能見度', value: row.vis == null ? '—' : `${fmt.vis(row.vis)} 個月`, detail: `占季營收 ${fmt.pct(row.clRevPct)}`, tip: tooltips.visibility, cardTip: '合約負債期末餘額相當於未來幾個月的營收。>3 個月為長訂單能見度、1–3 個月為一般,<1 個月為短期能見度。' },
-
   ];
-
   document.getElementById('clStats').innerHTML = items.map(item => `
-
     <div class="order-kpi ${item.cls || ''}" ${tipAttr(item.cardTip)}>
-
       <div class="label" ${tipAttr(item.tip)}>${item.label}</div>
-
       <div class="value">${item.value}</div>
-
       ${item.detail ? `<div class="detail" ${tipAttr(tooltips.clRev)}>${item.detail}</div>` : ''}
-
     </div>`).join('');
 
   const level = row.clYoY == null ? '資料不足' : row.clYoY > 30 ? '強勁' : row.clYoY > 10 ? '穩健' : row.clYoY > 0 ? '溫和' : '轉弱';
-
   let trend = '';
-
   if (state.qIdx >= 3) {
-
     const last = stock.quarterly.slice(state.qIdx - 3, state.qIdx + 1).map(item => item.cl);
-
     const up = last.slice(1).every((value, index) => value >= last[index]);
-
     const down = last.slice(1).every((value, index) => value <= last[index]);
-
     trend = up ? '、近 3 季走高' : down ? '、近 3 季走跌' : '';
-
   }
-
   document.getElementById('clNote').innerHTML = `訂單池 <b>${moneyWithUnit(row.cl, unitInfo)}</b>,YoY ${fmt.pctS(row.clYoY)}(${level})${trend}。相當於 <b>${fmt.vis(row.vis)}</b> 個月能見度,佔本季認列營收 <b>${fmt.pct(row.clRevPct)}</b>。`;
-
 }
 
 function renderFunnel() {
-
   const i = state.qIdx;
-
   const q = stock.quarterly[i];
-
   const py = i >= 4 ? stock.quarterly[i - 4] : null;
-
   const ind = indicators(q);
-
   const cogs = q.rev - q.gp;
-
   const opex = q.gp - q.op;
-
   const below = q.op - q.np;
-
   const taxOther = q.op + q.noi - q.np;
-
   const belowPct = q.op ? Math.abs(below / q.op * 100) : null;
-
   const unitInfo = pickUnit(q.rev);
-
   document.getElementById('funnelUnit').textContent = `單位：${unitInfo.unit}`;
-
   const maxSqrt = Math.sqrt(q.rev);
-
   const width = value => Math.max(4, Math.sqrt(Math.max(value, 0.01)) / maxSqrt * 100);
-
   const stages = [
-
     { key: 'rev', name: '營業收入', sub: `營業收入 · YoY ${fmt.pctS(rate(q.rev, py?.rev))}`, value: q.rev, badge: '基準 100%', badgeClass: 'brass', tip: tooltips.rev, badgeTip: tooltips.rev },
-
     { key: 'gp', name: '營業毛利', sub: '營業毛利', value: q.gp, badge: `毛利率 ${fmt.pct(ind.gm)}`, badgeClass: health.gm(ind.gm), tip: tooltips.gp, badgeTip: tooltips.gm },
-
     { key: 'op', name: '營業利益', sub: '本業獲利', value: q.op, badge: `營益率 ${fmt.pct(ind.om)}`, badgeClass: health.om(ind.om), tip: tooltips.op, badgeTip: tooltips.om },
-
     { key: 'np', name: '稅後淨利', sub: `EPS ${fmt.eps(q.eps)} · YoY ${fmt.pctS(rate(q.np, py?.np))}`, value: q.np, badge: `淨利率 ${fmt.pct(ind.nm)}`, badgeClass: health.nm(ind.nm), tip: tooltips.np, badgeTip: tooltips.nm },
-
   ];
-
   const leaks = [
-
     { pill: `毛利率 ${fmt.pct(ind.gm)}`, cls: health.gm(ind.gm), pillTip: tooltips.gm, label: '營業成本', amount: `−${formatMoney(cogs, unitInfo)}`, note: `占營收 ${fmt.pct(100 - ind.gm)}`, bandTip: tooltips.cogs },
-
     { pill: `落地率 ${fmt.pct(ind.landing)}`, cls: health.landing(ind.landing), pillTip: tooltips.landing, label: '營業費用', amount: `−${formatMoney(opex, unitInfo)}`, note: `占毛利 ${fmt.pct(opex / q.gp * 100)}`, bandTip: tooltips.opex },
-
     { pill: `業外+稅 ${formatMoneySigned(-below, unitInfo)}`, cls: health.below(belowPct), pillTip: tooltips.below, label: `業外 ${formatMoneySigned(q.noi, unitInfo)} · 稅+其他 ${formatMoneySigned(-taxOther, unitInfo)}`, amount: `淨 ${formatMoneySigned(-below, unitInfo)}`, note: `占營業利益 ${fmt.pct(belowPct)}`, bandTip: `${tooltips.noi} ${tooltips.below}` },
-
   ];
-
   const html = [];
-
   stages.forEach((stage, index) => {
-
     html.push(`<div class="tier tier-${stage.key}" ${tipAttr(stage.tip)}>
-
       <div class="tier-fill" style="width:${width(stage.value)}%"></div>
-
       <div class="tier-content"><div class="tier-label"><div class="tier-name">${stage.name}</div><div class="tier-sub">${stage.sub}</div></div>
-
       <div class="tier-right"><span class="tier-badge ${stage.badgeClass}" ${tipAttr(stage.badgeTip)}>${stage.badge}</span><span class="tier-val">${formatMoney(stage.value, unitInfo)}</span></div></div></div>`);
-
     if (index < leaks.length) {
-
       const leak = leaks[index];
-
       html.push(`<div class="leak"><span class="leak-pill ${leak.cls}" ${tipAttr(leak.pillTip)}>${leak.pill}</span>
-
         <div class="leak-band" ${tipAttr(leak.bandTip)}><span class="lbl">${leak.label}</span><span class="amt">${leak.amount}</span></div>
-
         <span class="leak-note">${leak.note}</span></div>`);
-
     }
-
   });
-
   document.getElementById('funnel').innerHTML = html.join('');
-
   document.getElementById('funnelSub').textContent = `${q.q} · 4 段轉化`;
-
 }
 
 function renderGauges() {
-
   const q = stock.quarterly[state.qIdx];
-
   const prev = state.qIdx > 0 ? stock.quarterly[state.qIdx - 1] : null;
-
   const now = indicators(q);
-
   const before = prev ? indicators(prev) : {};
-
   const delta = (a, b) => a == null || b == null ? null : a - b;
-
   const items = [
-
     { label: '毛利率', value: now.gm, change: delta(now.gm, before.gm), cls: health.gm(now.gm), fill: Math.min(now.gm, 100), tip: tooltips.gm },
-
     { label: '營益率', value: now.om, change: delta(now.om, before.om), cls: health.om(now.om), fill: Math.min(Math.max(now.om, 0) * 4, 100), tip: tooltips.om },
-
     { label: '淨利率', value: now.nm, change: delta(now.nm, before.nm), cls: health.nm(now.nm), fill: Math.min(Math.max(now.nm, 0) * 5, 100), tip: tooltips.nm },
-
     { label: '業外占淨利', value: now.noiRatio, change: delta(now.noiRatio, before.noiRatio), cls: health.noi(now.noiRatio), fill: Math.min(Math.abs(now.noiRatio || 0), 100), tip: tooltips.noiRatio, signed: true },
-
   ];
-
   document.getElementById('gauges').innerHTML = items.map(item => {
-
     const change = item.change == null ? 'QoQ —' : `QoQ ${item.change >= 0 ? '+' : '−'}${Math.abs(item.change).toFixed(1)}pp`;
-
     const changeClass = item.change == null ? '' : item.change > 0 ? 'up' : item.change < 0 ? 'down' : '';
-
     const value = item.value == null ? '—' : item.signed ? fmt.pctS(item.value).replace('%', '') : item.value.toFixed(1);
-
     return `<div class="gauge ${item.cls}" ${tipAttr(item.tip)}><div class="gauge-head"><span class="gauge-name">${item.label}</span><span class="gauge-delta ${changeClass}">${change}</span></div><div class="gauge-val">${value}<span class="u">%</span></div><div class="gauge-track"><div class="gauge-fill" style="width:${item.fill}%"></div></div></div>`;
-
   }).join('');
-
 }
 
 function renderInsights() {
-
   const i = state.qIdx;
-
   const row = quarterRow(i);
-
   const prev = i > 0 ? quarterRow(i - 1) : null;
-
   const clUnit = pickUnit(row.cl);
-
   const revUnit = pickUnit(row.rev);
-
   const profitUnit = pickUnit(maxAbs([row.op, row.np, row.op - row.np]));
-
   const items = [];
-
   if (hasCL) {
-
     items.push({ cls: health.clYoy(row.clYoY), body: `合約負債期末 <strong>${moneyWithUnit(row.cl, clUnit)}</strong>,YoY <strong>${fmt.pctS(row.clYoY)}</strong>,對應約 <strong>${fmt.vis(row.vis)}</strong> 個月能見度。<em>訂單池是未來認列的燃料而非即時營收,關鍵在水位持續走高且和實際認列營收同步成長。</em>` });
-
   }
-
   const revLevel = row.revYoY == null ? '' : row.revYoY > 15 ? 'good' : row.revYoY > 0 ? '' : 'warn';
-
   items.push({ cls: revLevel, body: `本季營收 <strong>${moneyWithUnit(row.rev, revUnit)}</strong>,YoY <strong>${fmt.pctS(row.revYoY)}</strong>。<em>${row.revYoY == null ? '年增率資料不足。' : row.revYoY > 15 ? '認列動能強,訂單順利轉化為營收。' : row.revYoY > 0 ? '溫和成長,認列速度平穩。' : '成長停滯,需檢視是專案延遲或需求疲軟。'}</em>` });
-
   const gmLevel = health.gm(row.gm);
-
   const gmDelta = prev ? row.gm - prev.gm : null;
-
   items.push({ cls: gmLevel, body: `毛利率 <strong>${fmt.pct(row.gm)}</strong>,QoQ <strong>${gmDelta == null ? '—' : `${gmDelta >= 0 ? '+' : '−'}${Math.abs(gmDelta).toFixed(1)}pp`}</strong>。<em>${gmLevel === 'good' ? '產品組合與成本控制穩健,毛利端無承壓。' : gmLevel === 'warn' ? '介於中段,觀察營業成本是否結構化上升。' : '毛利偏低,檢視售價與原料成本壓力。'}</em>` });
-
   const landingLevel = health.landing(row.landing);
-
   items.push({ cls: landingLevel, body: `落地率 <strong>${fmt.pct(row.landing)}</strong>,營業費用吃掉 <strong>${fmt.pct(100 - row.landing)}</strong> 毛利。<em>${landingLevel === 'good' ? '費用控制良好,毛利多能落地為營業利益。' : landingLevel === 'warn' ? '費用率偏中,關注費用是否結構化擴張。' : '毛利大部分被費用吃掉,本業獲利彈性有限。'}</em>` });
-
   if (Math.abs(row.noiRatio) > 25) {
-
     items.push({ cls: 'warn', body: `淨利 <strong>${moneyWithUnit(row.np, profitUnit)}</strong> 與營業利益 <strong>${moneyWithUnit(row.op, profitUnit)}</strong> 差額 <strong>${moneyWithUnit(row.op - row.np, profitUnit)}</strong>。<em>本季業外+稅費占營業利益 ${fmt.pct((row.op - row.np) / row.op * 100)},判讀本業品質應以營益率為主。</em>` });
-
   }
-
   document.getElementById('insights').innerHTML = items.slice(0, 4).map((item, index) => `<div class="insight ${item.cls}"><div class="insight-idx">${String(index + 1).padStart(2, '0')}</div><div class="insight-body">${item.body}</div></div>`).join('');
-
 }
 
 const growthConfig = {
-
   rev: { name: '營業收入', tab: '營收成長率', key: 'rev', yoy: 'revYoY', qoq: 'revQoQ', tip: tooltips.rev, amount: true },
-
   gp: { name: '營業毛利', tab: '毛利成長率', key: 'gp', yoy: 'gpYoY', qoq: 'gpQoQ', tip: tooltips.gp, amount: true },
-
   op: { name: '營業利益', tab: '營益成長率', key: 'op', yoy: 'opYoY', qoq: 'opQoQ', tip: tooltips.op, amount: true },
-
   np: { name: '稅後淨利', tab: '淨利成長率', key: 'np', yoy: 'npYoY', qoq: 'npQoQ', tip: tooltips.np, amount: true },
-
   eps: { name: 'EPS', tab: 'EPS 成長率', key: 'eps', yoy: 'epsYoY', qoq: 'epsQoQ', tip: tooltips.eps, amount: false },
-
   cl: { name: '合約負債流動', tab: '合約負債-流動', key: 'cl', yoy: 'clYoY', qoq: 'clQoQ', tip: tooltips.cl, amount: true },
-
 };
 
 function cumulativeValue(rows, index, key) {
-
   const year = rows[index].q.slice(0, 4);
-
   return rows.slice(0, index + 1).filter(row => row.q.startsWith(year)).reduce((sum, row) => sum + row[key], 0);
-
 }
 
 function growthRows() {
-
   const rows = stock.quarterly.map((q, index) => quarterRow(index));
-
   return rows.map((row, index) => {
-
     const revCum = cumulativeValue(rows, index, 'rev');
-
     const epsCum = cumulativeValue(rows, index, 'eps');
-
     const priorIndex = index - 4;
-
     const priorRevCum = priorIndex >= 0 ? cumulativeValue(rows, priorIndex, 'rev') : null;
-
     const priorEpsCum = priorIndex >= 0 ? cumulativeValue(rows, priorIndex, 'eps') : null;
-
     return { ...row, revCum, revCumYoY: rate(revCum, priorRevCum), epsCum, epsCumYoY: rate(epsCum, priorEpsCum) };
-
   });
-
 }
 
 let growthChart;
-
 function renderGrowth() {
-
   const rows = growthRows();
-
   const config = growthConfig[state.growth];
-
   const current = rows[state.qIdx];
-
   const growthKey = state.growthMode === 'yoy' ? config.yoy : config.qoq;
-
   const barUnit = config.amount
-
     ? pickUnit(maxAbs(rows.map(row => row[config.key])))
-
     : { unit: '元', divisor: 1, decimals: 2 };
-
   const lineUnit = state.growth === 'cl'
-
     ? pickUnit(maxAbs(rows.map(row => row.rev)))
-
     : null;
-
   document.querySelectorAll('#growthTabs .growth-tab').forEach(button => button.classList.toggle('active', button.dataset.growth === state.growth));
-
   document.querySelectorAll('#growthMetric button').forEach(button => button.classList.toggle('active', button.dataset.mode === state.growthMode));
 
   const mainValue = config.amount ? formatMoney(current[config.key], barUnit) : fmt.eps(current[config.key]);
-
   const stats = state.growth === 'cl'
-
     ? [
-
         { label: '期別', value: current.q, tip: tooltips.cl },
-
         { label: `合約負債流動(${barUnit.unit})`, value: formatMoney(current.cl, barUnit), tip: tooltips.cl },
-
         { label: `季營業收入淨額(${lineUnit.unit})`, value: formatMoney(current.rev, lineUnit), tip: tooltips.rev },
-
       ]
-
     : [
-
         { label: '期別', value: current.q, tip: config.tip },
-
         { label: `當季${config.name}(${barUnit.unit})`, value: mainValue, tip: config.tip },
-
         { label: 'YoY 年增率', value: fmt.pctS(current[config.yoy]), tip: tooltips.yoy, signed: current[config.yoy] },
-
         { label: 'QoQ 季增率', value: fmt.pctS(current[config.qoq]), tip: tooltips.qoq, signed: current[config.qoq] },
-
       ];
-
   document.getElementById('growthStats').innerHTML = stats.map(stat => `<div class="growth-stat" ${tipAttr(stat.tip)}><div class="label">${stat.label}</div><div class="value ${stat.signed == null ? '' : stat.signed >= 0 ? 'positive' : 'negative'}">${stat.value}</div></div>`).join('');
 
   const canvas = document.getElementById('growthChart');
-
   if (growthChart) growthChart.destroy();
-
   const datasets = state.growth === 'cl'
-
     ? [
-
         { type: 'bar', label: '合約負債流動', data: rows.map(row => row.cl / barUnit.divisor), backgroundColor: context => context.dataIndex === state.qIdx ? 'rgba(212,165,116,0.9)' : 'rgba(212,165,116,0.5)', borderColor: '#d4a574', borderWidth: 1, borderRadius: 3, yAxisID: 'y', barPercentage: 0.7, categoryPercentage: 0.8 },
-
         { type: 'line', label: '季營業收入淨額', data: rows.map(row => row.rev / lineUnit.divisor), borderColor: '#5eead4', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: context => context.dataIndex === state.qIdx ? 5 : 3, pointBackgroundColor: '#5eead4', yAxisID: 'y1' },
-
       ]
-
     : [
-
         { type: 'bar', label: config.name, data: rows.map(row => row[config.key] / barUnit.divisor), backgroundColor: context => context.dataIndex === state.qIdx ? 'rgba(212,165,116,0.9)' : 'rgba(212,165,116,0.5)', borderColor: '#d4a574', borderWidth: 1, borderRadius: 3, yAxisID: 'y', barPercentage: 0.7, categoryPercentage: 0.8 },
-
         { type: 'line', label: state.growthMode === 'yoy' ? 'YoY 年增率' : 'QoQ 季增率', data: rows.map(row => row[growthKey]), borderColor: '#5eead4', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, spanGaps: true, pointRadius: context => context.dataIndex === state.qIdx ? 5 : 3, pointBackgroundColor: '#5eead4', yAxisID: 'y1' },
-
       ];
-
   growthChart = new Chart(canvas, {
-
     data: { labels: rows.map(row => row.q), datasets },
-
     options: {
-
       responsive: true,
-
       maintainAspectRatio: false,
-
       interaction: { mode: 'index', intersect: false },
-
       onClick: (event, elements) => {
-
         if (state.growth !== 'cl' || !elements.length || elements[0].datasetIndex !== 0) return;
-
         state.qIdx = elements[0].index;
-
         renderAll();
-
         const target = document.getElementById('orderPanel');
-
         target.focus({ preventScroll: true });
-
         target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
       },
-
       plugins: {
-
         legend: { display: false },
-
         tooltip: {
-
           ...tooltipTheme(),
-
           callbacks: {
-
             label: context => {
-
               if (state.growth !== 'cl' && context.datasetIndex === 1) return `${context.dataset.label}: ${fmt.pctS(context.parsed.y)}`;
-
               const row = rows[context.dataIndex];
-
               if (state.growth === 'eps' && context.datasetIndex === 0) return `EPS:${fmt.eps(row.eps)} 元`;
-
               if (state.growth === 'cl' && context.datasetIndex === 1) return `季營業收入淨額:${moneyWithUnit(row.rev, lineUnit)}`;
-
               return `${context.dataset.label}:${moneyWithUnit(row[config.key], barUnit)}`;
-
             }
-
           }
-
         }
-
       },
-
       scales: {
-
         x: { grid: { display: false }, border: { color: '#262c3d' }, ticks: { color: '#5a6478', font: { family: 'JetBrains Mono', size: 10 } } },
-
         y: { position: 'left', grid: { color: 'rgba(38,44,61,0.5)' }, border: { display: false }, ticks: { color: '#d4a574', font: { family: 'JetBrains Mono', size: 10 }, callback: value => state.growth === 'eps' ? Number(value).toFixed(1) : formatAxisMoney(value, barUnit) } },
-
         y1: { position: 'right', grid: { drawOnChartArea: false }, border: { display: false }, ticks: { color: '#5eead4', font: { family: 'JetBrains Mono', size: 10 }, callback: value => state.growth === 'cl' ? formatAxisMoney(value, lineUnit) : `${Number(value).toFixed(0)}%` } },
-
       }
-
     }
-
   });
-
   renderGrowthTable(rows);
-
 }
 
 function growthColumns() {
-
   const common = [{ key: 'q', label: '期別', type: 'text' }];
-
   const columns = {
-
     rev: [...common, { key: 'rev', label: '營收', type: 'money' }, { key: 'revQoQ', label: '季增率', type: 'signedPct' }, { key: 'revYoY', label: '年增率', type: 'signedPct' }, { key: 'revCum', label: '累計營收', type: 'money' }, { key: 'revCumYoY', label: '累計年增率', type: 'signedPct' }],
-
     gp: [...common, { key: 'gp', label: '毛利', type: 'money' }, { key: 'gpQoQ', label: '季增率', type: 'signedPct' }, { key: 'gpYoY', label: '年增率', type: 'signedPct' }, { key: 'gm', label: '毛利率', type: 'pct' }],
-
     op: [...common, { key: 'op', label: '營業利益', type: 'money' }, { key: 'opQoQ', label: '季增率', type: 'signedPct' }, { key: 'opYoY', label: '年增率', type: 'signedPct' }, { key: 'om', label: '營益率', type: 'pct' }],
-
     np: [...common, { key: 'np', label: '稅後淨利', type: 'money' }, { key: 'npQoQ', label: '季增率', type: 'signedPct' }, { key: 'npYoY', label: '年增率', type: 'signedPct' }, { key: 'nm', label: '淨利率', type: 'pct' }],
-
     eps: [...common, { key: 'eps', label: 'EPS', type: 'eps' }, { key: 'epsQoQ', label: '季增率', type: 'signedPct' }, { key: 'epsYoY', label: '年增率', type: 'signedPct' }],
-
     cl: [...common, { key: 'cl', label: '合約負債', type: 'money' }, { key: 'clQoQ', label: '合約負債季增率', type: 'signedPct' }, { key: 'clYoY', label: '合約負債年增率', type: 'signedPct' }, { key: 'clRevPct', label: '合約負債占季營收比', type: 'pct' }, { key: 'rev', label: '季營收', type: 'money' }],
-
   };
-
   const selected = columns[state.growth];
-
   const config = growthConfig[state.growth];
-
   const activeKey = state.growthMode === 'yoy' ? config.yoy : config.qoq;
-
   const inactiveKey = state.growthMode === 'yoy' ? config.qoq : config.yoy;
-
   const activeColumn = selected.find(column => column.key === activeKey);
-
   const inactiveColumn = selected.find(column => column.key === inactiveKey);
-
   const remaining = selected.filter(column => column.key !== activeKey && column.key !== inactiveKey);
-
   return [...remaining.slice(0, 2), activeColumn, inactiveColumn, ...remaining.slice(2)];
-
 }
 
 function tooltipForColumn(column) {
-
   if (column.key.includes('YoY') || column.key === 'revCumYoY') return tooltips.yoy;
-
   if (column.key.includes('QoQ')) return tooltips.qoq;
-
   if (column.key === 'cl') return tooltips.cl;
-
   if (column.key === 'clRevPct') return tooltips.clRev;
-
   if (column.key === 'gm') return tooltips.gm;
-
   if (column.key === 'om') return tooltips.om;
-
   if (column.key === 'nm') return tooltips.nm;
-
   if (column.key.startsWith('eps')) return tooltips.eps;
-
   return growthConfig[state.growth].tip;
-
 }
 
 function unitForColumn(column, rows) {
-
   if (column.type === 'money') return pickUnit(maxAbs(rows.map(row => row[column.key])));
-
   if (column.type === 'eps') return { unit: '元', divisor: 1, decimals: 2 };
-
   if (column.type === 'months') return { unit: '月', divisor: 1, decimals: 1 };
-
   return null;
-
 }
 
 function columnHeader(column, unitInfo) {
-
   return `${column.label}${unitInfo ? `<span class="col-unit">(${unitInfo.unit})</span>` : ''}`;
-
 }
 
 function formatTableValue(value, type, unitInfo) {
-
   if (value == null) return { text: '—', cls: '' };
-
   if (type === 'money') return { text: formatMoney(value, unitInfo), cls: '' };
-
   if (type === 'pct') return { text: fmt.pct(value), cls: '' };
-
   if (type === 'signedPct') return { text: fmt.pctS(value), cls: value > 0 ? 'val-pos' : value < 0 ? 'val-neg' : '' };
-
   if (type === 'eps') return { text: fmt.eps(value), cls: '' };
-
   if (type === 'months') return { text: fmt.vis(value), cls: '' };
-
   return { text: String(value), cls: '' };
-
 }
 
 function sortRows(rows, key, direction) {
-
   if (!key) return rows;
-
   const multiplier = direction === 'asc' ? 1 : -1;
-
   return [...rows].sort((a, b) => {
-
     const av = a[key], bv = b[key];
-
     if (av == null) return 1;
-
     if (bv == null) return -1;
-
     return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * multiplier;
-
   });
-
 }
 
 function renderGrowthTable(rows) {
-
   const columns = growthColumns();
-
   const sorted = sortRows(rows, state.growthSortBy, state.growthSortDir);
-
   const selectedGrowthKey = growthConfig[state.growth][state.growthMode];
-
   const colUnits = Object.fromEntries(columns.map(column => [column.key, unitForColumn(column, rows)]));
-
   document.getElementById('growthHead').innerHTML = `<tr>${columns.map(column => {
-
     const sort = state.growthSortBy === column.key ? state.growthSortDir === 'asc' ? 'ascending' : 'descending' : 'none';
-
     return `<th class="${column.key === selectedGrowthKey ? 'growth-selected' : ''}" data-key="${column.key}" aria-sort="${sort}" ${tipAttr(tooltipForColumn(column))}>${columnHeader(column, colUnits[column.key])}</th>`;
-
   }).join('')}</tr>`;
-
   document.getElementById('growthBody').innerHTML = sorted.map(row => `<tr class="${row.idx === state.qIdx ? 'selected' : ''}" data-idx="${row.idx}" tabindex="0">${columns.map(column => {
-
     const cell = formatTableValue(row[column.key], column.type, colUnits[column.key]);
-
     return `<td class="${cell.cls} ${column.key === selectedGrowthKey ? 'growth-selected' : ''}" ${tipAttr(tooltipForColumn(column))}>${cell.text}</td>`;
-
   }).join('')}</tr>`).join('');
-
   document.querySelectorAll('#growthHead th').forEach(th => th.addEventListener('click', () => {
-
     const key = th.dataset.key;
-
     if (state.growthSortBy === key) state.growthSortDir = state.growthSortDir === 'asc' ? 'desc' : 'asc';
-
     else { state.growthSortBy = key; state.growthSortDir = 'desc'; }
-
     renderGrowthTable(rows);
-
   }));
-
 }
 
 function aggregateMonthly(mode) {
-
   if (mode === 'M') return stock.monthly.map(row => ({ label: row[0], value: row[1] }));
-
   const buckets = new Map();
-
   stock.monthly.forEach(([month, value]) => {
-
     const [year, monthNumber] = month.split('-').map(Number);
-
     const key = mode === 'Q' ? `${year}/${Math.ceil(monthNumber / 3)}Q` : String(year);
-
     buckets.set(key, (buckets.get(key) || 0) + value);
-
   });
-
   return [...buckets].map(([label, value]) => ({ label, value }));
-
 }
 
 function movingAverage(values, length) {
-
   return values.map((value, index) => {
-
     if (index < length - 1) return null;
-
     return values.slice(index - length + 1, index + 1).reduce((sum, item) => sum + item, 0) / length;
-
   });
-
 }
 
 function crosses(shortLine, longLine) {
-
   const result = [];
-
   for (let index = 1; index < shortLine.length; index++) {
-
     if ([shortLine[index - 1], longLine[index - 1], shortLine[index], longLine[index]].some(value => value == null)) continue;
-
     const previous = shortLine[index - 1] - longLine[index - 1];
-
     const current = shortLine[index] - longLine[index];
-
     if (previous <= 0 && current > 0) result.push({ index, type: 'golden' });
-
     if (previous >= 0 && current < 0) result.push({ index, type: 'death' });
-
   }
-
   return result;
-
 }
 
 function renderMaChart() {
-
   const series = aggregateMonthly(state.period);
-
   const values = series.map(item => item.value);
-
   const averages = { 3: movingAverage(values, 3), 6: movingAverage(values, 6), 12: movingAverage(values, 12) };
-
   const unitInfo = pickUnit(maxAbs(values));
-
   const scaledValues = values.map(value => value / unitInfo.divisor);
-
   const scaledAverages = Object.fromEntries(Object.entries(averages).map(([length, line]) => [length, line.map(value => value == null ? null : value / unitInfo.divisor)]));
-
   const unitName = state.period === 'M' ? '月' : state.period === 'Q' ? '季' : '年';
-
   document.querySelectorAll('#periodToggle button').forEach(button => button.classList.toggle('active', button.dataset.period === state.period));
-
   document.querySelectorAll('#maLegends .ma-toggle').forEach(button => {
-
     const length = Number(button.dataset.ma);
-
     const disabled = state.period === 'Y' && length !== 3;
-
     button.disabled = disabled;
-
     button.classList.toggle('hidden-line', !state.maVisible[length]);
-
     button.querySelector('span:last-child').textContent = `${length} ${unitName}均線`;
-
     const tip = length === 3 ? `近 3 個${unitName}營收的算術平均。反映短期動能。` : length === 6 ? `近 6 個${unitName}營收的算術平均。反映中期動能。` : `近 12 個${unitName}營收的算術平均。反映長期趨勢。`;
-
     button.dataset.tooltip = tip;
-
   });
-
   const crossList = state.period === 'Y' ? [] : crosses(averages[3], averages[12]);
-
   const radius = averages[3].map(() => 0);
-
   const colors = averages[3].map(() => 'transparent');
-
   crossList.forEach(cross => { radius[cross.index] = 6; colors[cross.index] = cross.type === 'golden' ? '#5eead4' : '#f87171'; });
-
   if (maChart) maChart.destroy();
-
   maChart = new Chart(document.getElementById('maChart'), {
-
     data: {
-
       labels: series.map(item => item.label),
-
       datasets: [
-
         { type: 'bar', label: `${unitName}營收`, data: scaledValues, backgroundColor: 'rgba(212,165,116,0.16)', borderColor: 'transparent', borderRadius: 2, barPercentage: 0.65, categoryPercentage: 0.85 },
-
         { type: 'line', label: `3 ${unitName}均線`, data: scaledAverages[3], hidden: !state.maVisible[3], borderColor: '#d4a574', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, spanGaps: false, pointRadius: radius, pointBackgroundColor: colors, pointBorderColor: colors, pointHoverRadius: 6 },
-
         { type: 'line', label: `6 ${unitName}均線`, data: scaledAverages[6], hidden: !state.maVisible[6] || state.period === 'Y', borderColor: '#fbbf24', backgroundColor: 'transparent', borderWidth: 1.8, tension: 0.3, spanGaps: false, pointRadius: 0 },
-
         { type: 'line', label: `12 ${unitName}均線`, data: scaledAverages[12], hidden: !state.maVisible[12] || state.period === 'Y', borderColor: '#8a94a8', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4, 3], tension: 0.3, spanGaps: false, pointRadius: 0 },
-
       ]
-
     },
-
     options: {
-
       responsive: true,
-
       maintainAspectRatio: false,
-
       interaction: { mode: 'index', intersect: false },
-
       plugins: {
-
         legend: { display: false },
-
         tooltip: {
-
           ...tooltipTheme(),
-
           displayColors: false,
-
           filter: context => context.datasetIndex === 0,
-
           callbacks: {
-
             label: context => {
-
               const index = context.dataIndex;
-
               const rows = [
-
                 `${unitName}營收:${moneyWithUnit(values[index], unitInfo)}`,
-
                 `3 ${unitName}均線:${moneyWithUnit(averages[3][index], unitInfo)}`,
-
                 `6 ${unitName}均線:${moneyWithUnit(averages[6][index], unitInfo)}`,
-
                 `12 ${unitName}均線:${moneyWithUnit(averages[12][index], unitInfo)}`,
-
               ];
-
               return rows;
-
             }
-
           }
-
         }
-
       },
-
       scales: {
-
         x: { grid: { display: false }, border: { color: '#262c3d' }, ticks: { color: '#5a6478', font: { family: 'JetBrains Mono', size: 9 }, maxTicksLimit: 10, autoSkip: true } },
-
         y: { grid: { color: 'rgba(38,44,61,0.5)' }, border: { display: false }, ticks: { color: '#5a6478', font: { family: 'JetBrains Mono', size: 10 }, callback: value => formatAxisMoney(value, unitInfo) } },
-
       }
-
     }
-
   });
-
 }
 
 const v2ViewSchemas = {
-
   std: [
-
     { key: 'q', label: '季度', type: 'text', tip: tooltips.rev },
-
     { key: 'rev', label: '營收', type: 'money', tip: tooltips.rev },
-
     { key: 'gm', label: '毛利率', type: 'pct', tip: tooltips.gm },
-
     { key: 'om', label: '營益率', type: 'pct', tip: tooltips.om },
-
     { key: 'nm', label: '淨利率', type: 'pct', tip: tooltips.nm },
-
     { key: 'eps', label: 'EPS', type: 'eps', tip: tooltips.eps },
-
   ],
-
   full: [
-
     { key: 'q', label: '季度', type: 'text', tip: tooltips.rev },
-
     { key: 'rev', label: '營收', type: 'money', tip: tooltips.rev },
-
     { key: 'gp', label: '毛利', type: 'money', tip: tooltips.gp },
-
     { key: 'op', label: '營業利益', type: 'money', tip: tooltips.op },
-
     { key: 'noi', label: '業外', type: 'money', tip: tooltips.noi },
-
     { key: 'np', label: '淨利', type: 'money', tip: tooltips.np },
-
     { key: 'eps', label: 'EPS', type: 'eps', tip: tooltips.eps },
-
   ],
-
   cl: [
-
     { key: 'q', label: '季度', type: 'text', tip: tooltips.cl },
-
     { key: 'cl', label: '合約負債', type: 'money', tip: tooltips.cl },
-
     { key: 'clYoY', label: '合約負債年增率', type: 'signedPct', tip: tooltips.yoy },
-
     { key: 'clQoQ', label: '合約負債季增率', type: 'signedPct', tip: tooltips.qoq },
-
     { key: 'rev', label: '季營收', type: 'money', tip: tooltips.rev },
-
     { key: 'clRevPct', label: '合約負債占季營收比', type: 'pct', tip: tooltips.clRev },
-
     { key: 'vis', label: '能見度', type: 'months', tip: tooltips.visibility },
-
   ],
-
   growth: [
-
     { key: 'q', label: '季度', type: 'text', tip: tooltips.yoy },
-
     { key: 'revYoY', label: '營收年增率', type: 'signedPct', tip: tooltips.yoy },
-
     { key: 'gpYoY', label: '毛利年增率', type: 'signedPct', tip: tooltips.yoy },
-
     { key: 'opYoY', label: '營業利益年增率', type: 'signedPct', tip: tooltips.yoy },
-
     { key: 'npYoY', label: '淨利年增率', type: 'signedPct', tip: tooltips.yoy },
-
     { key: 'clYoY', label: '合約負債年增率', type: 'signedPct', tip: tooltips.yoy },
-
   ],
-
 };
 
 function renderTable() {
-
   const columns = v2ViewSchemas[state.view];
-
   const rows = sortRows(stock.quarterly.map((q, index) => quarterRow(index)), state.sortBy, state.sortDir);
-
   const colUnits = Object.fromEntries(columns.map(column => [column.key, unitForColumn(column, rows)]));
-
   document.getElementById('dataHead').innerHTML = `<tr>${columns.map(column => {
-
     const sort = state.sortBy === column.key ? state.sortDir === 'asc' ? 'ascending' : 'descending' : 'none';
-
     return `<th data-key="${column.key}" aria-sort="${sort}" ${tipAttr(column.tip)}>${columnHeader(column, colUnits[column.key])}</th>`;
-
   }).join('')}</tr>`;
-
   document.getElementById('dataBody').innerHTML = rows.map(row => `<tr class="${row.idx === state.qIdx ? 'selected' : ''}" data-idx="${row.idx}" tabindex="0">${columns.map(column => {
-
     const cell = formatTableValue(row[column.key], column.type, colUnits[column.key]);
-
     return `<td class="${cell.cls}" ${tipAttr(column.tip)}>${cell.text}</td>`;
-
   }).join('')}</tr>`).join('');
-
   document.querySelectorAll('#dataHead th').forEach(th => th.addEventListener('click', () => {
-
     const key = th.dataset.key;
-
     if (state.sortBy === key) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
-
     else { state.sortBy = key; state.sortDir = 'desc'; }
-
     renderTable();
-
   }));
-
   document.querySelectorAll('#dataBody tr').forEach(row => {
-
     const select = () => { state.qIdx = Number(row.dataset.idx); renderAll(); };
-
     row.addEventListener('click', select);
-
     row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } });
-
   });
-
 }
 
 let tooltipTimer;
-
 function hideTooltip() {
-
   clearTimeout(tooltipTimer);
-
   document.getElementById('tooltipFloat').classList.remove('show');
-
 }
 
 function scheduleTooltip(target) {
-
   clearTimeout(tooltipTimer);
-
   tooltipTimer = setTimeout(() => {
-
     const floating = document.getElementById('tooltipFloat');
-
     floating.textContent = target.dataset.tooltip;
-
     floating.classList.add('show');
-
     const rect = target.getBoundingClientRect();
-
     const width = floating.offsetWidth;
-
     const height = floating.offsetHeight;
-
     const left = Math.max(10, Math.min(window.innerWidth - width - 10, rect.left + rect.width / 2 - width / 2));
-
     const above = rect.top - height - 10;
-
     floating.style.left = `${left}px`;
-
     floating.style.top = `${above >= 8 ? above : rect.bottom + 10}px`;
-
   }, 400);
-
 }
 
 function bindTooltipDelegation() {
-
   document.addEventListener('mouseover', event => {
-
     const target = event.target.closest('[data-tooltip]');
-
     if (target && !target.contains(event.relatedTarget)) scheduleTooltip(target);
-
   });
-
   document.addEventListener('mouseout', event => {
-
     const target = event.target.closest('[data-tooltip]');
-
     if (target && !target.contains(event.relatedTarget)) hideTooltip();
-
   });
-
   document.addEventListener('focusin', event => { const target = event.target.closest('[data-tooltip]'); if (target) scheduleTooltip(target); });
-
   document.addEventListener('focusout', hideTooltip);
-
   window.addEventListener('scroll', hideTooltip, { passive: true });
-
 }
 
 /* =========================================================
-
    Controls
-
    ========================================================= */
-
 function bindControls() {
-
   document.getElementById('qPicker').addEventListener('click', () => {
-
     state.qIdx = (state.qIdx + 1) % stock.quarterly.length;
-
     renderAll();
-
   });
 
   document.getElementById('viewTabs').addEventListener('click', event => {
-
     const button = event.target.closest('button[data-view]');
-
     if (!button) return;
-
     state.view = button.dataset.view;
-
     state.sortBy = null;
-
     document.querySelectorAll('#viewTabs button').forEach(item => item.classList.toggle('active', item === button));
-
     renderTable();
-
   });
 
   document.getElementById('growthTabs').addEventListener('click', event => {
-
     const button = event.target.closest('button[data-growth]');
-
     if (!button || button.hidden) return;
-
     state.growth = button.dataset.growth;
-
     state.growthSortBy = null;
-
     renderGrowth();
-
   });
 
   document.getElementById('growthMetric').addEventListener('click', event => {
-
     const button = event.target.closest('button[data-mode]');
-
     if (!button) return;
-
     state.growthMode = button.dataset.mode;
-
     renderGrowth();
-
   });
 
   document.getElementById('periodToggle').addEventListener('click', event => {
-
     const button = event.target.closest('button[data-period]');
-
     if (!button) return;
-
     state.period = button.dataset.period;
-
     renderMaChart();
-
   });
 
   document.getElementById('maLegends').addEventListener('click', event => {
-
     const button = event.target.closest('button[data-ma]');
-
     if (!button || button.disabled) return;
-
     const length = Number(button.dataset.ma);
-
     state.maVisible[length] = !state.maVisible[length];
-
     renderMaChart();
-
   });
 
   document.getElementById('industryChip').addEventListener('click', () => alert('跳至選股掃描,篩選:系統整合'));
-
   ['reportChip', 'monthlyChip'].forEach(id => {
-
     const chip = document.getElementById(id);
-
     chip.addEventListener('click', event => {
-
       event.stopPropagation();
-
       const opening = !chip.classList.contains('open');
-
       document.querySelectorAll('.chip-button.open').forEach(item => { item.classList.remove('open'); item.setAttribute('aria-expanded', 'false'); });
-
       chip.classList.toggle('open', opening);
-
       chip.setAttribute('aria-expanded', String(opening));
-
     });
-
   });
-
   document.addEventListener('click', () => document.querySelectorAll('.chip-button.open').forEach(item => { item.classList.remove('open'); item.setAttribute('aria-expanded', 'false'); }));
-
 }
 
 /* =========================================================
-
    Coordinator
-
    ========================================================= */
-
 function renderAll() {
-
   document.getElementById('qPickerLabel').textContent = stock.quarterly[state.qIdx].q;
-
   document.getElementById('orderPanel').hidden = !hasCL;
-
   document.getElementById('clChip').hidden = !hasCL;
-
   const clGrowthTab = document.querySelector('[data-growth="cl"]');
-
   clGrowthTab.hidden = !hasCL;
-
   if (!hasCL && state.growth === 'cl') state.growth = 'rev';
-
   if (hasCL) renderClStats();
-
   renderFunnel();
-
   renderGauges();
-
   renderInsights();
-
   renderGrowth();
-
   renderTable();
-
 }
 
 async function boot() {
-
   setStatus('loading');
-
   try {
-
     await loadStock();
-
     state = {
-
       qIdx: stock.quarterly.length - 1,
-
       view: 'std',
-
       sortBy: null,
-
       sortDir: 'desc',
-
       growth: 'rev',
-
       growthMode: 'yoy',
-
       growthSortBy: null,
-
       growthSortDir: 'desc',
-
       period: 'M',
-
       maVisible: { 3: true, 6: true, 12: true },
-
     };
-
     hasCL = Math.max(...stock.quarterly.map(q => q.cl)) /
-
       Math.max(...stock.quarterly.map(q => q.rev)) > 0.15;
-
     await loadMeta();
-
     applyMetaToTopbar();
-
     // === Layer 3.5 fix: 更新 hero / title / topbar 搜尋框 ===
-
     const industryMap = { semi: '半導體', component: '電子零組件', integration: '系統整合', chemical: '化工', biotech: '生技', machinery: '機械', traditional: '傳產', finance: '金融' };
-
     document.title = `${stock.name} ${stock.id} · 財報轉化漏斗`;
-
     const heroId = document.querySelector('.hero-id');
-
     const heroName = document.querySelector('.hero-name');
-
     const heroCrumb = document.querySelector('.hero-crumb');
-
     if (heroId) heroId.textContent = stock.id;
-
     if (heroName) heroName.textContent = stock.name;
-
     if (heroCrumb) {
-
       const marketLabel = stock.market === 'otc' ? 'OTC' : 'TWSE';
-
       const industryLabel = industryMap[stock.industry] || stock.industry;
-
       heroCrumb.textContent = `${marketLabel} · ${industryLabel}`;
-
     }
-
     const searchBox = document.querySelector('.search-box input');
-
     if (searchBox) searchBox.value = stock.id;
+    // === Layer 3.5 fix: 搜尋框 Enter 跳轉 ===
+    if (searchBox && !searchBox.dataset.bound) {
+      searchBox.dataset.bound = '1';
+      searchBox.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const id = searchBox.value.trim();
+          if (/^\d{4,6}$/.test(id)) {
+            location.href = `stock.html?id=${id}`;
+          } else if (id) {
+            searchBox.style.borderColor = 'var(--coral)';
+            setTimeout(() => { searchBox.style.borderColor = ''; }, 800);
+          }
+        }
+      });
+    }
+    // === end search binding ===
 
     // === end Layer 3.5 fix ===
 
     bindControls();
-
     bindTooltipDelegation();
-
     renderAll();
-
     renderMaChart();
-
     setStatus('ok');
-
   } catch (err) {
-
     if (err instanceof NotFoundError) { setStatus('notfound'); }
-
     else {
-
       document.getElementById('errorDetail').textContent = `${err.message || '未知錯誤'}。可能是網路異常或後端資料尚未部署。`;
-
       setStatus('error');
-
     }
-
   }
-
 }
-
 boot();
-
 </script>
-
 </body>
-
 </html>
