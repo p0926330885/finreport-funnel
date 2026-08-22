@@ -47,7 +47,7 @@ def _fs_pivot(fs_df: pd.DataFrame) -> pd.DataFrame:
             if dst == "eps":
                 wide[dst] = wide[src]  # EPS 已是元
             else:
-                wide[dst] = wide[src] / 1000  # 千元 -> 百萬
+                wide[dst] = wide[src] / 1_000_000  # 元 -> 百萬
         else:
             wide[dst] = None
     keep = ["date"] + list(config.FS_FIELD_MAP.values())
@@ -65,7 +65,7 @@ def _bs_pivot(bs_df: pd.DataFrame) -> pd.DataFrame:
     ).reset_index()
     for src, dst in config.BS_FIELD_MAP.items():
         if src in wide.columns:
-            wide[dst] = wide[src] / 1000
+            wide[dst] = wide[src] / 1_000_000
         else:
             wide[dst] = 0
     return wide[["date", "cl"]].sort_values("date").reset_index(drop=True)
@@ -131,7 +131,7 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
         rev_sorted = rev_df.sort_values("date")
         for _, row in rev_sorted.iterrows():
             date_str = str(row["date"])[:7]  # YYYY-MM
-            monthly.append([date_str, round(float(row["revenue"]) / 1000)])
+            monthly.append([date_str, round(float(row["revenue"]) / 1_000_000)])
         monthly = monthly[-config.MONTHLY_HISTORY_MONTHS:]
 
     return {
