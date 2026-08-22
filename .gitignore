@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+
+# raw data cache does NOT go into git
+cache/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
