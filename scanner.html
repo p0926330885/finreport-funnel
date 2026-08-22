@@ -780,6 +780,24 @@ async function boot() {
     await loadScanner();
     await loadMeta();
     applyMetaToTopbar();
+    // === Layer 3.5 fix: 搜尋框 Enter 跳轉 ===
+    const searchBox = document.querySelector('.search-box input');
+    if (searchBox && !searchBox.dataset.bound) {
+      searchBox.dataset.bound = '1';
+      searchBox.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const id = searchBox.value.trim();
+          if (/^\d{4,6}$/.test(id)) {
+            location.href = `stock.html?id=${id}`;
+          } else if (id) {
+            searchBox.style.borderColor = 'var(--coral)';
+            setTimeout(() => { searchBox.style.borderColor = ''; }, 800);
+          }
+        }
+      });
+    }
+    // === end search binding ===
+
     bindControls();
     renderAll();
     setStatus('ok');
