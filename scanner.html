@@ -279,6 +279,12 @@ a { color: inherit; text-decoration: none; }
 body[data-status="loading"] .wrap, body[data-status="notfound"] .wrap, body[data-status="error"] .wrap { display: none; }
 body[data-status="ok"] .status-panel { display: none; }
 @media (max-width: 640px) { .status-panel { min-height: 36vh; padding: 40px 16px; } .status-panel h2 { font-size: 16px; } .status-icon { width: 36px; height: 36px; } }
+
+/* ============================================================
+   Fix: HTML5 hidden 屬性被 .status-panel display:flex 覆蓋
+   ============================================================ */
+[hidden] { display: none !important; }
+
 </style>
 </head>
 <body>
@@ -780,29 +786,31 @@ async function boot() {
     await loadScanner();
     await loadMeta();
     applyMetaToTopbar();
-    // === Layer 3.5 fix: 搜尋框 Enter 跳轉 ===
-    const searchBox = document.querySelector('.search-box input');
-    if (searchBox && !searchBox.dataset.bound) {
-      searchBox.dataset.bound = '1';
-      searchBox.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          const id = searchBox.value.trim();
-          if (/^\d{4,6}$/.test(id)) {
-            location.href = `stock.html?id=${id}`;
-          } else if (id) {
-            searchBox.style.borderColor = 'var(--coral)';
-            setTimeout(() => { searchBox.style.borderColor = ''; }, 800);
-          }
-        }
-      });
-    }
-    // === end search binding ===
-
     bindControls();
     renderAll();
+    // 綁定 Enter 搜尋 + 中文搜尋 (若 v2 已部署)
+    if (typeof bindSmartSearch === 'function') { bindSmartSearch(); }
+    else {
+      const searchBox = document.querySelector('.search-box input');
+      if (searchBox && !searchBox.dataset.bound) {
+        searchBox.dataset.bound = '1';
+        searchBox.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            const id = searchBox.value.trim();
+            if (/^\d{4,6}$/.test(id)) location.href = `stock.html?id=${id}`;
+            else if (id) {
+              searchBox.style.borderColor = 'var(--coral)';
+              setTimeout(() => { searchBox.style.borderColor = ''; }, 800);
+            }
+          }
+        });
+      }
+    }
     setStatus('ok');
   } catch (err) {
-    document.getElementById('errorDetail').textContent = `${err.message || '未知錯誤'}。可能是網路異常或後端資料尚未部署。`;
+    console.error('[boot] 載入失敗:', err);
+    document.getElementById('errorDetail').textContent =
+      `${err.message || '未知錯誤'}。可能是網路異常或後端資料尚未部署。`;
     setStatus('error');
   }
 }
