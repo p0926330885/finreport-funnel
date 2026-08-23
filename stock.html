@@ -1355,8 +1355,8 @@ body[data-status="ok"] .status-panel { display: none; }
     <div class="brand-text">財報轉化漏斗<span class="sub">Financial Conversion Funnel</span></div>
   </a>
   <nav class="nav-tabs" aria-label="主要導覽">
-    <button class="nav-tab">選股掃描</button>
-    <button class="nav-tab active" aria-current="page">個股詳細</button>
+    <a href="./scanner.html" class="nav-tab" style="text-decoration:none;display:inline-flex;align-items:center;">選股掃描</a>
+    <a href="./stock.html" class="nav-tab active" aria-current="page" style="text-decoration:none;display:inline-flex;align-items:center;">個股詳細</a>
   </nav>
   <div class="topbar-spacer"></div>
   <div class="search-box"><input type="text" aria-label="搜尋股號或名稱" placeholder="搜尋股號 / 名稱" value="6789"></div>
@@ -2529,6 +2529,21 @@ async function boot() {
     }
     const searchBox = document.querySelector('.search-box input');
     if (searchBox) searchBox.value = stock.id;
+    // === v3 (方案 C): 記住上次看的股票 ===
+    try { localStorage.setItem('lastViewedStock', stock.id); } catch (e) {}
+    // === 保險: 確保 topbar 連結可點 ===
+    document.querySelectorAll('a.brand, a.nav-tab').forEach(link => {
+      if (!link.dataset.linkBound) {
+        link.dataset.linkBound = '1';
+        link.addEventListener('click', (e) => {
+          const href = link.getAttribute('href');
+          if (href && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+            location.href = href;
+          }
+        });
+      }
+    });
     // === Layer 3.5 fix: 搜尋框 Enter 跳轉 ===
     if (searchBox && !searchBox.dataset.bound) {
       searchBox.dataset.bound = '1';
