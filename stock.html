@@ -1346,6 +1346,18 @@ body[data-status="ok"] .status-panel { display: none; }
 @media (max-width: 640px) { .status-panel { min-height: 36vh; padding: 40px 16px; } .status-panel h2 { font-size: 16px; } .status-icon { width: 36px; height: 36px; } }
 
 [hidden] { display: none !important; }
+
+/* v3: hasCL false 時隱藏 CL 相關 UI */
+[data-view-tab="cl"][hidden] { display: none !important; }
+
+/* v3 insights: tone 顏色差異化 */
+.insight-card[data-tone="mint"]  { border-left: 3px solid var(--mint); }
+.insight-card[data-tone="amber"] { border-left: 3px solid var(--amber); }
+.insight-card[data-tone="red"]   { border-left: 3px solid var(--coral); }
+.insight-card[data-tone="mint"]  .insight-num { color: var(--mint); }
+.insight-card[data-tone="amber"] .insight-num { color: var(--amber); }
+.insight-card[data-tone="red"]   .insight-num { color: var(--coral); }
+
 </style>
 </head>
 <body>
@@ -1944,7 +1956,7 @@ function renderFunnel() {
   ];
   const leaks = [
     { pill: `毛利率 ${fmt.pct(ind.gm)}`, cls: health.gm(ind.gm), pillTip: tooltips.gm, label: '營業成本', amount: `−${formatMoney(cogs, unitInfo)}`, note: `占營收 ${fmt.pct(100 - ind.gm)}`, bandTip: tooltips.cogs },
-    { pill: `落地率 ${fmt.pct(ind.landing)}`, cls: health.landing(ind.landing), pillTip: tooltips.landing, label: '營業費用', amount: `−${formatMoney(opex, unitInfo)}`, note: `占毛利 ${fmt.pct(opex / q.gp * 100)}`, bandTip: tooltips.opex },
+    { pill: `毛利轉化率 ${fmt.pct(ind.landing)}`, cls: health.landing(ind.landing), pillTip: tooltips.landing, label: '營業費用', amount: `−${formatMoney(opex, unitInfo)}`, note: `占毛利 ${fmt.pct(opex / q.gp * 100)}`, bandTip: tooltips.opex },
     { pill: `業外+稅 ${formatMoneySigned(-below, unitInfo)}`, cls: health.below(belowPct), pillTip: tooltips.below, label: `業外 ${formatMoneySigned(q.noi, unitInfo)} · 稅+其他 ${formatMoneySigned(-taxOther, unitInfo)}`, amount: `淨 ${formatMoneySigned(-below, unitInfo)}`, note: `占營業利益 ${fmt.pct(belowPct)}`, bandTip: `${tooltips.noi} ${tooltips.below}` },
   ];
   const html = [];
@@ -1985,27 +1997,20 @@ function renderGauges() {
 }
 
 function renderInsights() {
-  const i = state.qIdx;
-  const row = quarterRow(i);
-  const prev = i > 0 ? quarterRow(i - 1) : null;
-  const clUnit = pickUnit(row.cl);
-  const revUnit = pickUnit(row.rev);
-  const profitUnit = pickUnit(maxAbs([row.op, row.np, row.op - row.np]));
-  const items = [];
-  if (hasCL) {
-    items.push({ cls: health.clYoy(row.clYoY), body: `合約負債期末 <strong>${moneyWithUnit(row.cl, clUnit)}</strong>,YoY <strong>${fmt.pctS(row.clYoY)}</strong>,對應約 <strong>${fmt.vis(row.vis)}</strong> 個月能見度。<em>訂單池是未來認列的燃料而非即時營收,關鍵在水位持續走高且和實際認列營收同步成長。</em>` });
+  const container = document.getElementById('insightsPanel');
+  if (!container) return;
+  // v3: 優先使用 pipeline 產出的 insights (SPEC-insights-v3.1)
+  if (Array.isArray(stock.insights) && stock.insights.length > 0) {
+    container.innerHTML = stock.insights.map((ins, i) => {
+      const num = String(i + 1).padStart(2, '0');
+      const tone = ins.tone || 'amber';
+      const safe = String(ins.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<div class="insight-card" data-tone="${tone}"><span class="insight-num">${num}</span><p class="insight-text">${safe}</p></div>`;
+    }).join('');
+    return;
   }
-  const revLevel = row.revYoY == null ? '' : row.revYoY > 15 ? 'good' : row.revYoY > 0 ? '' : 'warn';
-  items.push({ cls: revLevel, body: `本季營收 <strong>${moneyWithUnit(row.rev, revUnit)}</strong>,YoY <strong>${fmt.pctS(row.revYoY)}</strong>。<em>${row.revYoY == null ? '年增率資料不足。' : row.revYoY > 15 ? '認列動能強,訂單順利轉化為營收。' : row.revYoY > 0 ? '溫和成長,認列速度平穩。' : '成長停滯,需檢視是專案延遲或需求疲軟。'}</em>` });
-  const gmLevel = health.gm(row.gm);
-  const gmDelta = prev ? row.gm - prev.gm : null;
-  items.push({ cls: gmLevel, body: `毛利率 <strong>${fmt.pct(row.gm)}</strong>,QoQ <strong>${gmDelta == null ? '—' : `${gmDelta >= 0 ? '+' : '−'}${Math.abs(gmDelta).toFixed(1)}pp`}</strong>。<em>${gmLevel === 'good' ? '產品組合與成本控制穩健,毛利端無承壓。' : gmLevel === 'warn' ? '介於中段,觀察營業成本是否結構化上升。' : '毛利偏低,檢視售價與原料成本壓力。'}</em>` });
-  const landingLevel = health.landing(row.landing);
-  items.push({ cls: landingLevel, body: `落地率 <strong>${fmt.pct(row.landing)}</strong>,營業費用吃掉 <strong>${fmt.pct(100 - row.landing)}</strong> 毛利。<em>${landingLevel === 'good' ? '費用控制良好,毛利多能落地為營業利益。' : landingLevel === 'warn' ? '費用率偏中,關注費用是否結構化擴張。' : '毛利大部分被費用吃掉,本業獲利彈性有限。'}</em>` });
-  if (Math.abs(row.noiRatio) > 25) {
-    items.push({ cls: 'warn', body: `淨利 <strong>${moneyWithUnit(row.np, profitUnit)}</strong> 與營業利益 <strong>${moneyWithUnit(row.op, profitUnit)}</strong> 差額 <strong>${moneyWithUnit(row.op - row.np, profitUnit)}</strong>。<em>本季業外+稅費占營業利益 ${fmt.pct((row.op - row.np) / row.op * 100)},判讀本業品質應以營益率為主。</em>` });
-  }
-  document.getElementById('insights').innerHTML = items.slice(0, 4).map((item, index) => `<div class="insight ${item.cls}"><div class="insight-idx">${String(index + 1).padStart(2, '0')}</div><div class="insight-body">${item.body}</div></div>`).join('');
+  // Backward compat: 舊資料無 insights 欄位時,顯示提示
+  container.innerHTML = '<div class="insight-card" data-tone="amber"><span class="insight-num">--</span><p class="insight-text">判讀生成中,請於下次 daily-build 後查看。</p></div>';
 }
 
 const growthConfig = {
@@ -2563,6 +2568,15 @@ async function boot() {
 
     // === end Layer 3.5 fix ===
 
+    // v3: hasCL false 時隱藏 CL 相關 UI (SPEC-insights-v3 section 6)
+    if (!stock.hasCL) {
+      document.querySelectorAll('[data-view-tab="cl"], [data-growth="cl"], .growth-tab[data-growth="cl"]').forEach(el => {
+        el.hidden = true;
+      });
+      // fallback state
+      if (state && state.view === 'cl') state.view = 'std';
+      if (state && state.growth === 'cl') state.growth = 'rev';
+    }
     bindControls();
     bindTooltipDelegation();
     renderAll();
