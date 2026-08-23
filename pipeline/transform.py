@@ -672,8 +672,20 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
         same_year_slice = [x for x in full_quarterly[: i + 1] if _year_of(x["q"]) == year]
         item["revCum"] = sum((x["rev"] or 0) for x in same_year_slice)
         item["epsCum"] = round(sum((x["eps"] or 0) for x in same_year_slice), 2)
+    # 累計 YoY:必須「當前年累加季數」== 「去年同期年累加季數」才有比較意義。
+    # 例:當前 2022/3Q 累加 3 季 (Q1+Q2+Q3),py 2021/3Q 也必須累加 3 季才對稱。
+    # 若 py 落在 full_quarterly 起頭附近,同年前面幾季不在陣列裡,累加不對稱 → 設 None。
+    def _acc_count(idx):
+        year = _year_of(full_quarterly[idx]["q"])
+        cnt = 0
+        for j in range(idx, -1, -1):
+            if _year_of(full_quarterly[j]["q"]) != year:
+                break
+            cnt += 1
+        return cnt
+
     for i, item in enumerate(full_quarterly):
-        if i >= 4:
+        if i >= 4 and _acc_count(i) == _acc_count(i - 4):
             py = full_quarterly[i - 4]
             item["revCumYoY"] = _y(item["revCum"], py["revCum"])
             item["epsCumYoY"] = _y(item["epsCum"], py["epsCum"])
