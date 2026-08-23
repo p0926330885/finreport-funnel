@@ -21,6 +21,520 @@ log = logging.getLogger(__name__)
 
 
 # ============================================================
+# v3 Insights Engine (per SPEC-insights-v3.1)
+# ============================================================
+# ============================================================
+# YoY / 衍生指標計算
+# ============================================================
+
+def _pct(x, y):
+    """安全百分比: x/y * 100. 若 y ~= 0 返回 None."""
+    if y is None or abs(y) < 0.01:
+        return None
+    return (x / y) * 100.0
+
+
+def _yoy_rate(now, ly):
+    """YoY 成長率 %. now, ly 都要有值."""
+    if now is None or ly is None or abs(ly) < 0.01:
+        return None
+    return (now - ly) / abs(ly) * 100.0
+
+
+def _compute_derived(q):
+    """計算 gm/om/nm/opgm 等衍生指標. 若 rev/gp 為 0, 相應指標為 None."""
+    if not q:
+        return {}
+    rev = q.get('rev') or 0
+    gp = q.get('gp') or 0
+    op = q.get('op') or 0
+    np = q.get('np') or 0
+    noi = q.get('noi') or 0
+    return {
+        'rev': rev, 'gp': gp, 'op': op, 'np': np, 'noi': noi,
+        'gm': _pct(gp, rev),
+        'om': _pct(op, rev),
+        'nm': _pct(np, rev),
+        'opgm': _pct(op, gp),
+    }
+
+
+def _compute_yoy(now_d, ly_d):
+    """計算 YoY 集. now_d/ly_d 是 _compute_derived 的結果."""
+    if not ly_d:
+        return None
+    yoy = {
+        'rev_yoy': _yoy_rate(now_d['rev'], ly_d['rev']),
+        'gp_yoy':  _yoy_rate(now_d['gp'],  ly_d['gp']),
+        'op_yoy':  _yoy_rate(now_d['op'],  ly_d['op']),
+        'np_yoy':  _yoy_rate(now_d['np'],  ly_d['np']),
+    }
+    # pp 差 (百分點, 不是相除)
+    for k in ('gm', 'om', 'nm', 'opgm'):
+        now_v = now_d.get(k)
+        ly_v  = ly_d.get(k)
+        yoy[f'{k}_yoy_delta'] = (now_v - ly_v) if (now_v is not None and ly_v is not None) else None
+    return yoy
+
+
+def _noi_np_ratio(now_d):
+    """業外淨額佔淨利比重 (帶符號). 若 |np| < 0.01 用 0.01 保護."""
+    noi = now_d.get('noi', 0) or 0
+    np  = now_d.get('np', 0) or 0
+    denom = np if abs(np) >= 0.01 else 0.01
+    return noi / denom
+
+
+# ============================================================
+# 11 種模式判定 (SPEC section 3.3 ~ section 3.13)
+# ============================================================
+# 每個 match_MXX(now, yoy) 只做布林判定, 不產出句型.
+# 全部條件都用 and 邏輯串起, 有 None 就 return False.
+
+def _all_not_none(*vals):
+    return all(v is not None for v in vals)
+
+
+def match_m01(now, yoy):
+    """本業弱靠業外美化 (最高優先)"""
+    om = now.get('om')
+    op_yoy = yoy.get('op_yoy')
+    np_yoy = yoy.get('np_yoy')
+    if not _all_not_none(om, np_yoy):
+        return False
+    if not (om < 3.0 or (op_yoy is not None and op_yoy < 0)):
+        return False
+    if np_yoy < 30:
+        return False
+    r = _noi_np_ratio(now)
+    return abs(r) > 0.5 and r > 0  # 業外正貢獻
+
+
+def match_m02(now, yoy):
+    """本業強但業外拖累"""
+    op_yoy, np_yoy = yoy.get('op_yoy'), yoy.get('np_yoy')
+    if not _all_not_none(op_yoy, np_yoy):
+        return False
+    if op_yoy <= 20 or np_yoy >= 0:
+        return False
+    r = _noi_np_ratio(now)
+    return abs(r) > 0.25 and r < 0  # 業外負拖累
+
+
+def match_m03(now, yoy):
+    """負向營運槓桿"""
+    rev_yoy, op_yoy = yoy.get('rev_yoy'), yoy.get('op_yoy')
+    if not _all_not_none(rev_yoy, op_yoy):
+        return False
+    return (rev_yoy < 0
+            and op_yoy < rev_yoy - 10
+            and op_yoy < -15)
+
+
+def match_m04(now, yoy):
+    """費用失控"""
+    gm_delta = yoy.get('gm_yoy_delta')
+    op_yoy = yoy.get('op_yoy')
+    rev_yoy = yoy.get('rev_yoy')
+    if not _all_not_none(gm_delta, op_yoy, rev_yoy):
+        return False
+    return (abs(gm_delta) < 2
+            and op_yoy < -15
+            and rev_yoy > 0)
+
+
+def match_m05(now, yoy):
+    """殺價搶單 / 做白工 (v3.1 微調: gm_delta < -3)"""
+    rev_yoy = yoy.get('rev_yoy')
+    gm_delta = yoy.get('gm_yoy_delta')
+    op_yoy = yoy.get('op_yoy')
+    if not _all_not_none(rev_yoy, gm_delta, op_yoy):
+        return False
+    return (rev_yoy > 15
+            and gm_delta < -3  # v3.1 微調 (原 -5)
+            and op_yoy <= 0)
+
+
+def match_m06(now, yoy):
+    """營運槓桿釋放 (正向)"""
+    rev_yoy, op_yoy = yoy.get('rev_yoy'), yoy.get('op_yoy')
+    if not _all_not_none(rev_yoy, op_yoy):
+        return False
+    return (rev_yoy > 5
+            and op_yoy > rev_yoy + 10
+            and op_yoy > 20)
+
+
+def match_m07(now, yoy):
+    """產品組合優化"""
+    rev_yoy = yoy.get('rev_yoy')
+    gm_delta = yoy.get('gm_yoy_delta')
+    om_delta = yoy.get('om_yoy_delta')
+    if not _all_not_none(rev_yoy, gm_delta, om_delta):
+        return False
+    return (abs(rev_yoy) < 5
+            and gm_delta > 3
+            and om_delta > 3)
+
+
+def match_m08(now, yoy):
+    """強勁定價權"""
+    rev_yoy = yoy.get('rev_yoy')
+    gp_yoy = yoy.get('gp_yoy')
+    gm_delta = yoy.get('gm_yoy_delta')
+    if not _all_not_none(rev_yoy, gp_yoy, gm_delta):
+        return False
+    return (rev_yoy > 10
+            and gp_yoy > rev_yoy + 3
+            and gm_delta > 1)
+
+
+def match_m09(now, yoy):
+    """戰略投資期"""
+    rev_yoy = yoy.get('rev_yoy')
+    gp_yoy = yoy.get('gp_yoy')
+    op_yoy = yoy.get('op_yoy')
+    opgm_delta = yoy.get('opgm_yoy_delta')
+    if not _all_not_none(rev_yoy, gp_yoy, op_yoy, opgm_delta):
+        return False
+    return (rev_yoy > 10
+            and gp_yoy > 10
+            and op_yoy < gp_yoy - 15
+            and opgm_delta < -3)
+
+
+def match_m10(now, yoy):
+    """去蕪存菁 (主動縮量保利)"""
+    rev_yoy = yoy.get('rev_yoy')
+    gp_yoy = yoy.get('gp_yoy')
+    op_yoy = yoy.get('op_yoy')
+    if not _all_not_none(rev_yoy, gp_yoy, op_yoy):
+        return False
+    return (rev_yoy < -3
+            and gp_yoy > 5
+            and op_yoy > 5)
+
+
+def match_m11(now, yoy):
+    """規模效應放大 (薄利多銷)"""
+    rev_yoy = yoy.get('rev_yoy')
+    gm_delta = yoy.get('gm_yoy_delta')
+    op_yoy = yoy.get('op_yoy')
+    np_yoy = yoy.get('np_yoy')
+    if not _all_not_none(rev_yoy, gm_delta, op_yoy, np_yoy):
+        return False
+    return (rev_yoy > 15
+            and -3 < gm_delta < 1
+            and op_yoy > 5
+            and np_yoy > 5)
+
+
+# ============================================================
+# 判定引擎: 依優先序命中,先命中先出
+# ============================================================
+
+_MATCHERS = [
+    ('M01', '本業弱靠業外美化', match_m01),
+    ('M02', '本業強但業外拖累', match_m02),
+    ('M03', '負向營運槓桿',     match_m03),
+    ('M04', '費用失控',         match_m04),
+    ('M05', '殺價搶單',         match_m05),
+    ('M06', '營運槓桿釋放',     match_m06),
+    ('M07', '產品組合優化',     match_m07),
+    ('M08', '強勁定價權',       match_m08),
+    ('M09', '戰略投資期',       match_m09),
+    ('M10', '去蕪存菁',         match_m10),
+    ('M11', '規模效應放大',     match_m11),
+]
+
+
+def detect_mode(now, yoy):
+    """依 section 3.2 優先序判定. 返回 (code, name) 或 (None, None)."""
+    if not yoy:
+        return None, None
+    for code, name, fn in _MATCHERS:
+        try:
+            if fn(now, yoy):
+                return code, name
+        except Exception:  # 判定失敗當作未命中,不 raise
+            continue
+    return None, None
+
+
+# ============================================================
+# 商業模式句型 (SPEC section 3)
+# ============================================================
+
+def _build_mode_text(code, now, yoy, stock_name):
+    """依 mode code 產生完整判讀文字."""
+    g = now.get('gm') or 0
+    o = now.get('om') or 0
+    op = now.get('opgm') or 0
+    noi = now.get('noi') or 0
+    np  = now.get('np') or 0
+    noi_ratio = _noi_np_ratio(now) * 100  # 帶符號 %
+
+    rev_yoy = yoy.get('rev_yoy')
+    op_yoy = yoy.get('op_yoy')
+    gm_delta = yoy.get('gm_yoy_delta')
+    opgm_delta = yoy.get('opgm_yoy_delta')
+
+    def _r1(v): return f"{v:.1f}" if v is not None else "—"
+    def _s1(v): return f"{v:+.1f}" if v is not None else "—"
+
+    if code == 'M01':
+        return (f"每做 100 元生意,{stock_name}本業僅留下 {_r1(o)} 元營業利益,"
+                f"但業外收益貢獻 {abs(noi_ratio):.0f}% 淨利,獲利大幅仰賴業外挹注,"
+                f"本業轉換動能仍顯疲弱。")
+    if code == 'M02':
+        return (f"本業營運扎實,每做 100 元生意留下 {_r1(o)} 元營業利益"
+                f"(年增 {_s1(op_yoy)}%),但受業外淨損 {noi:.0f} 拖累底線衰退。"
+                f"可能為匯損、轉投資或一次性項目干擾,關注本業趨勢即可。")
+    if code == 'M03':
+        return (f"營收年減 {abs(rev_yoy or 0):.1f}%,但因廠房折舊與人事等固定費用剛性拖累,"
+                f"每做 100 元生意留下的營業利益驟降至 {_r1(o)} 元"
+                f"(年減 {abs(op_yoy or 0):.1f}%),觸發負向營運槓桿,"
+                f"獲利跌幅遠大於營收跌幅。")
+    if code == 'M04':
+        return (f"毛利率穩定在 {_r1(g)}%,每做 100 元生意依然賺進 {_r1(g)} 元毛利,"
+                f"但管理與行銷支出膨脹過快,毛利轉化率降至 {_r1(op)}%"
+                f"(較去年同期 {_s1(opgm_delta)}pp),本業獲利遭費用端侵蝕。"
+                f"建議追蹤下季費用結構是否回穩。")
+    if code == 'M05':
+        # op_yoy 顯示邏輯
+        if op_yoy is None:
+            op_disp = "反而衰退"
+        elif op_yoy < -5:
+            op_disp = f"反而衰退 {abs(op_yoy):.1f}%"
+        elif op_yoy <= 5:
+            op_disp = "幾乎未增"
+        else:
+            op_disp = f"僅微增 {op_yoy:.1f}%"
+        return (f"營收擴張 {_s1(rev_yoy)}%,但每做 100 元生意的毛利大幅滑落至 {_r1(g)} 元"
+                f"(年減 {abs(gm_delta or 0):.1f}pp),扣除管銷後營業利益{op_disp},"
+                f"面臨殺價搶單或成本暴漲壓力,量增價跌,實質獲利未受惠於營收成長。")
+    if code == 'M06':
+        return (f"每做 100 元生意賺進 {_r1(g)} 元毛利,能轉化 {_r1(o)} 元為本業利益。"
+                f"營收成長 {_s1(rev_yoy)}% 帶動固定費用稀釋,"
+                f"本業獲利爆發力(YoY {_s1(op_yoy)}%)遠高於營收增幅,展現正向營運槓桿。")
+    if code == 'M07':
+        gm_last = (now.get('gm') or 0) - (gm_delta or 0)
+        return (f"營收規模穩定({_s1(rev_yoy)}%),但每做 100 元生意的毛利"
+                f"由去年同期 {_r1(gm_last)} 元躍升至 {_r1(g)} 元"
+                f"({_s1(gm_delta)}pp),高毛利產品比重顯著拉升,獲利結構實質優化。")
+    if code == 'M08':
+        return (f"營收成長 {_s1(rev_yoy)}%,每做 100 元生意能賺進 {_r1(g)} 元毛利"
+                f"(年增 {_s1(gm_delta)}pp)。公司具備轉嫁成本能力,"
+                f"毛利空間隨規模同步擴大,展現定價權優勢。")
+    if code == 'M09':
+        return (f"每做 100 元生意能穩健賺取 {_r1(g)} 元毛利(年增 {_s1(gm_delta)}pp),"
+                f"但前期研發與市場開拓費用吃掉較多毛利,"
+                f"毛利轉化率暫降至 {_r1(op)}%(年減 {abs(opgm_delta or 0):.1f}pp),"
+                f"屬於主動性擴張投資。關注後續費用效率是否兌現。")
+    if code == 'M10':
+        return (f"營收規模雖縮水 {abs(rev_yoy or 0):.1f}%,但淘汰低毛利訂單後,"
+                f"每做 100 元生意的毛利提升至 {_r1(g)} 元(年增 {_s1(gm_delta)}pp),"
+                f"留下的營業利益反增 {_s1(op_yoy)}%,整體體質更為扎實。")
+    if code == 'M11':
+        return (f"每做 100 元生意的毛利略降至 {_r1(g)} 元({_s1(gm_delta)}pp),"
+                f"但營收規模大幅擴張 {_s1(rev_yoy)}% 帶動總獲利絕對金額持續墊高"
+                f"(營益 YoY {_s1(op_yoy)}%),展現薄利多銷的規模效應。")
+    return None
+
+
+def _mode_tone(code):
+    """SPEC section 3 每個模式的 tone."""
+    return {
+        'M01': 'red',    'M02': 'amber',
+        'M03': 'red',    'M04': 'amber', 'M05': 'red',
+        'M06': 'mint',   'M07': 'mint',  'M08': 'mint',
+        'M09': 'amber',  'M10': 'mint',  'M11': 'mint',
+    }.get(code, 'amber')
+
+
+# ============================================================
+# Fallback 主判讀 (SPEC section 5.2)
+# ============================================================
+
+def _build_fallback_primary(now, yoy, stock_name):
+    """未命中商業模式時的常規拆解."""
+    rev = now.get('rev', 0)
+    g = now.get('gm') or 0
+    o = now.get('om') or 0
+    gm_minus_om = g - o
+    rev_yoy = yoy.get('rev_yoy') if yoy else None
+
+    rev_yi = rev / 100.0  # 百萬 -> 億
+    rev_disp = f"{rev_yi:,.2f} 億"
+    if yoy and rev_yoy is not None:
+        rev_line = f"本季營收 {rev_disp}(YoY {rev_yoy:+.1f}%)"
+    else:
+        rev_line = f"本季營收 {rev_disp}"
+
+    return (f"{rev_line}。每做 100 元生意賺進 {g:.1f} 元毛利,"
+            f"其中 {o:.1f} 元順利轉化為本業利益,"
+            f"另外 {gm_minus_om:.1f} 元被營業費用吃掉。")
+
+
+# ============================================================
+# s02-s04 常規輔助 (SPEC section 5.3, 帶去重)
+# ============================================================
+
+def _build_gm_insight(now, yoy, dedup=False):
+    """s02: 毛利率評語. dedup=True 時簡短."""
+    g = now.get('gm')
+    gm_qoq = yoy.get('gm_yoy_delta') if yoy else None  # 註:實際 QoQ 需另傳,此處先用 YoY delta
+    # SPEC section 5.3 用 QoQ. 若無 QoQ 資料則省略.
+    if g is None:
+        return {'id':'s02','kind':'supporting','tone':'amber',
+                'mode_code':None,'mode_name':None,'text':'毛利率資料不足。'}
+    qoq_str = f",QoQ {gm_qoq:+.1f}pp" if gm_qoq is not None else ""
+    if dedup:
+        # 簡短版
+        return {'id':'s02','kind':'supporting','tone':'amber',
+                'mode_code':None,'mode_name':None,
+                'text': f"毛利率當前 {g:.1f}%,詳見主判讀。"}
+    # 分級
+    if g >= 40:
+        text = f"毛利率 {g:.1f}%{qoq_str}。優質毛利水準,展現產品定價力。"
+        tone = 'mint'
+    elif g >= 25:
+        text = f"毛利率 {g:.1f}%{qoq_str}。健康毛利區間,獲利基礎穩固。"
+        tone = 'mint'
+    elif g >= 15:
+        text = f"毛利率 {g:.1f}%{qoq_str}。中等毛利,關注成本壓力。"
+        tone = 'amber'
+    else:
+        text = f"毛利率 {g:.1f}%{qoq_str}。毛利偏低,檢視售價與原料成本壓力。"
+        tone = 'amber'
+    return {'id':'s02','kind':'supporting','tone':tone,
+            'mode_code':None,'mode_name':None,'text':text}
+
+
+def _build_opgm_insight(now, yoy, dedup=False):
+    """s03: 毛利轉化率評語."""
+    op = now.get('opgm')
+    if op is None:
+        return {'id':'s03','kind':'supporting','tone':'amber',
+                'mode_code':None,'mode_name':None,'text':'毛利轉化率資料不足。'}
+    eaten = 100 - op
+    if dedup:
+        return {'id':'s03','kind':'supporting','tone':'amber',
+                'mode_code':None,'mode_name':None,
+                'text': f"毛利轉化率當前 {op:.1f}%,詳見主判讀。"}
+    if op >= 70:
+        text = f"毛利轉化率 {op:.1f}%,營業費用僅吃掉 {eaten:.1f}% 毛利。費用控制優異,毛利高效轉化為營業利益。"
+        tone = 'mint'
+    elif op >= 50:
+        text = f"毛利轉化率 {op:.1f}%,營業費用吃掉 {eaten:.1f}% 毛利。費用控制良好,毛利多能轉化為營業利益。"
+        tone = 'mint'
+    elif op >= 30:
+        text = f"毛利轉化率 {op:.1f}%,營業費用吃掉 {eaten:.1f}% 毛利。費用比例偏高,關注是否結構性擴張。"
+        tone = 'amber'
+    else:
+        text = f"毛利轉化率 {op:.1f}%,營業費用吃掉 {eaten:.1f}% 毛利。費用侵蝕過重,本業轉化效率不佳。"
+        tone = 'red'
+    return {'id':'s03','kind':'supporting','tone':tone,
+            'mode_code':None,'mode_name':None,'text':text}
+
+
+def _build_noi_insight(now, dedup=False):
+    """s04: 業外評語."""
+    noi = now.get('noi') or 0
+    np = now.get('np') or 0
+    ratio = _noi_np_ratio(now)
+    abs_ratio = abs(ratio) * 100
+    direction = "貢獻" if noi > 0 else "拖累"
+    if dedup:
+        return {'id':'s04','kind':'supporting','tone':'amber',
+                'mode_code':None,'mode_name':None,
+                'text': f"業外淨額 {noi:.2f},詳見主判讀。"}
+    if abs_ratio < 5:
+        text = "業外項目影響輕微,獲利穩定來自本業。"
+        tone = 'mint'
+    elif abs_ratio < 15:
+        text = f"業外淨額 {noi:.2f},占淨利 {abs_ratio:.1f}%,影響有限。"
+        tone = 'amber'
+    elif abs_ratio < 30:
+        text = f"業外淨額 {noi:.2f}({direction}),占淨利 {abs_ratio:.1f}%,建議追蹤是否為經常性。"
+        tone = 'amber'
+    else:
+        text = f"業外淨額 {noi:.2f}({direction}),占淨利 {abs_ratio:.1f}%,顯著扭曲底線,關注一次性因素。"
+        tone = 'red'
+    return {'id':'s04','kind':'supporting','tone':tone,
+            'mode_code':None,'mode_name':None,'text':text}
+
+
+# ============================================================
+# 主入口: insights_v3
+# ============================================================
+
+def insights_v3(quarterly: list[dict], stock_name: str) -> list[dict]:
+    """
+    產生 4 條 insights.
+
+    Args:
+        quarterly: 季度資料 list, 每 item 含 rev/gp/op/np/noi/eps.
+                   時序為舊->新, 最後一筆為當季.
+                   至少需 1 季 (無 YoY 則走 fallback).
+        stock_name: 股票名稱, 用於句型.
+
+    Returns:
+        4 筆 dict list. 對應前端 s01-s04.
+    """
+    if not quarterly:
+        # 空資料保底
+        return [
+            {'id': f's0{i+1}', 'kind':'supporting','tone':'amber',
+             'mode_code':None,'mode_name':None,'text':'資料不足,無法產出判讀。'}
+            for i in range(4)
+        ]
+
+    now_d = _compute_derived(quarterly[-1])
+    ly_d  = _compute_derived(quarterly[-5]) if len(quarterly) >= 5 else None
+    yoy   = _compute_yoy(now_d, ly_d)
+
+    # 判定模式
+    code, name = detect_mode(now_d, yoy)
+
+    # 主判讀 s01
+    if code:
+        text = _build_mode_text(code, now_d, yoy, stock_name)
+        s01 = {
+            'id': 's01',
+            'kind': 'primary',
+            'tone': _mode_tone(code),
+            'mode_code': code,
+            'mode_name': name,
+            'text': text,
+        }
+    else:
+        text = _build_fallback_primary(now_d, yoy, stock_name)
+        s01 = {
+            'id': 's01',
+            'kind': 'supporting',
+            'tone': 'amber',
+            'mode_code': None,
+            'mode_name': None,
+            'text': text,
+        }
+
+    # s02-s04 常規輔助 (帶去重)
+    dedup_gm   = code in ('M05', 'M07', 'M08')
+    dedup_opgm = code in ('M04', 'M09')
+    dedup_noi  = code in ('M01', 'M02')
+
+    s02 = _build_gm_insight(now_d, yoy, dedup=dedup_gm)
+    s03 = _build_opgm_insight(now_d, yoy, dedup=dedup_opgm)
+    s04 = _build_noi_insight(now_d, dedup=dedup_noi)
+
+    return [s01, s02, s03, s04]
+# ============================================================
+# End of v3 insights engine
+# ============================================================
+
+
+# ============================================================
 # Helpers
 # ============================================================
 def _q_label(date_str: str) -> str:
@@ -134,6 +648,13 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
             monthly.append([date_str, round(float(row["revenue"]) / 1_000_000)])
         monthly = monthly[-config.MONTHLY_HISTORY_MONTHS:]
 
+    # v3: 產生自動判讀 (SPEC-insights-v3.1)
+    try:
+        insights = insights_v3(quarterly, name)
+    except Exception as exc:
+        log.warning("insights_v3 failed for %s: %s", stock_id, exc)
+        insights = []
+
     return {
         "id": stock_id,
         "name": name,
@@ -142,6 +663,7 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
         "hasCL": has_cl,
         "quarterly": quarterly,
         "monthly": monthly,
+        "insights": insights,
     }
 
 
