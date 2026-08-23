@@ -559,8 +559,8 @@ def _fs_pivot(fs_df: pd.DataFrame) -> pd.DataFrame:
     wide = fs_df.pivot_table(
         index="date", columns="type", values="value", aggfunc="first"
     ).reset_index()
-    # Debug: 列出實際的 type 值,幫助日後反查對映
-    log.info("FS wide.columns (first 40): %s", list(wide.columns)[:40])
+    # Debug: 列出全部 type 值(不限 40),幫助日後反查對映
+    log.info("FS wide.columns (ALL, %d cols): %s", len(wide.columns), list(wide.columns))
     for dst, candidates in config.FS_FIELD_MAP.items():
         matched = None
         for src in candidates:
@@ -593,8 +593,8 @@ def _bs_pivot(bs_df: pd.DataFrame) -> pd.DataFrame:
     wide = bs_df.pivot_table(
         index="date", columns="type", values="value", aggfunc="first"
     ).reset_index()
-    # Debug: 列出實際的 type 值
-    log.info("BS wide.columns (first 40): %s", list(wide.columns)[:40])
+    # Debug: 列出全部 type 值(不限 40)
+    log.info("BS wide.columns (ALL, %d cols): %s", len(wide.columns), list(wide.columns))
     for dst, candidates in config.BS_FIELD_MAP.items():
         matched = None
         for src in candidates:

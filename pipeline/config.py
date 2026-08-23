@@ -109,11 +109,11 @@ FS_FIELD_MAP = {
     "op":  ["OperatingIncome"],
     "np":  ["IncomeAfterTaxes"],
     "eps": ["EPS"],
-    # 業外收支(合計):FinMind 可能用多種命名,依序嘗試
+    # 業外收支(合計):FinMind 實際用單數 Expense(v3.3 log 確認)
     "noi": [
-        "TotalNonoperatingIncomeAndExpenses",   # SPEC 原值(舊)
-        "NonoperatingIncomeAndExpenses",        # 無 Total 前綴
-        "TotalNonOperatingIncomeAndExpense",    # 單數 Expense
+        "TotalNonoperatingIncomeAndExpense",    # ← FinMind 真名(單數 Expense,首選)
+        "TotalNonoperatingIncomeAndExpenses",   # SPEC 原值(複數,備用)
+        "NonoperatingIncomeAndExpenses",        # 無 Total
         "NonOperatingIncomeAndExpense",         # 無 Total + 單數
         "NonOperatingIncome",                   # 只有 Income
     ],
