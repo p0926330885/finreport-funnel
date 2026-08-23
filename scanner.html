@@ -548,7 +548,8 @@ function scorePoint(value, green, yellow, absolute = false) {
 function healthScore(stock) {
   return scorePoint(stock.gm, 25, 15) + scorePoint(stock.om, 8, 3) + scorePoint(stock.nm, 5, 0) + scorePoint(stock.noiRatio, 25, 70, true);
 }
-function scoreClass(score) { return score >= 6 ? 'good' : score >= 3 ? 'warn' : 'bad'; }
+function scoreClass(score) {
+    if (score == null) return ''; return score >= 6 ? 'good' : score >= 3 ? 'warn' : 'bad'; }
 function pickUnit(maxValue) {
   if (Math.abs(maxValue || 0) >= THRESHOLD_TO_YI) return { unit: '億', divisor: 100, decimals: 2 };
   return { unit: '百萬', divisor: 1, decimals: 0 };
@@ -680,12 +681,12 @@ function renderResults() {
   document.getElementById('resultsBody').innerHTML = rows.map(stock => `<tr data-stock-id="${stock.id}" tabindex="0" aria-label="查看 ${stock.id} ${stock.name}">
     <td class="stock-id">${stock.id}</td><td>${stock.name}</td><td class="stock-industry">${industries[stock.industry]}</td>
     <td>${formatMoney(stock.rev, revUnit)}</td><td class="${stock.revYoY > 0 ? 'value-positive' : stock.revYoY < 0 ? 'value-negative' : ''}">${formatSigned(stock.revYoY)}</td>
-    <td>${stock.om.toFixed(1)}%</td><td><span class="score ${scoreClass(stock.score)}">${stock.score.toFixed(1)}</span></td><td>${stock.vis == null ? '—' : stock.vis.toFixed(1)}</td>
+    <td>${stock.om == null ? '—' : stock.om.toFixed(1) + '%'}</td><td><span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span></td><td>${stock.vis == null ? '—' : stock.vis.toFixed(1)}</td>
   </tr>`).join('');
   document.getElementById('mobileResults').innerHTML = rows.map(stock => `<a class="stock-card" href="stock.html?id=${stock.id}">
-    <div class="stock-card-head"><span class="stock-card-title">${stock.id} · ${stock.name}</span><span class="score ${scoreClass(stock.score)}">${stock.score.toFixed(1)}</span></div>
+    <div class="stock-card-head"><span class="stock-card-title">${stock.id} · ${stock.name}</span><span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span></div>
     <div class="stock-card-industry">${industries[stock.industry]}</div>
-    <div class="stock-card-grid"><span>當季營收<b>${formatMoney(stock.rev, revUnit)} ${revUnit.unit}</b></span><span>YoY<b class="${stock.revYoY > 0 ? 'value-positive' : stock.revYoY < 0 ? 'value-negative' : ''}">${formatSigned(stock.revYoY)}</b></span><span>營益率<b>${stock.om.toFixed(1)}%</b></span><span>能見度<b>${stock.vis == null ? '—' : `${stock.vis.toFixed(1)} 月`}</b></span></div>
+    <div class="stock-card-grid"><span>當季營收<b>${formatMoney(stock.rev, revUnit)} ${revUnit.unit}</b></span><span>YoY<b class="${stock.revYoY > 0 ? 'value-positive' : stock.revYoY < 0 ? 'value-negative' : ''}">${formatSigned(stock.revYoY)}</b></span><span>營益率<b>${stock.om == null ? '—' : stock.om.toFixed(1) + '%'}</b></span><span>能見度<b>${stock.vis == null ? '—' : `${stock.vis.toFixed(1)} 月`}</b></span></div>
   </a>`).join('');
   const empty = filteredList.length === 0;
   document.getElementById('emptyState').classList.toggle('show', empty);
