@@ -1,144 +1,168 @@
-# 財報轉化漏斗 · 專案文件索引
+# 財報轉化漏斗 · Financial Conversion Funnel
 
-**專案**:財報轉化漏斗(Financial Conversion Funnel)
-**類型**:台股基本面分析工具 · 純靜態網頁 + Python pipeline
-**上線 URL**:https://p0926330885.github.io/finreport-funnel/
-**Repo**:https://github.com/p0926330885/finreport-funnel
+> 台股基本面分析工具 · 純靜態網頁 + Python 資料管線 · 每日自動更新
 
----
-
-## 給未來 AI(或未來自己)的第一段話
-
-若你是被丟進這個專案的 AI,或是隔了半年後回頭看不懂自己當初設計的自己,**請照以下順序讀這些 SPEC**,10 分鐘進入狀況:
-
-1. **先讀本 README.md**(你正在看)
-2. 依「SPEC 演化史」章節順序讀 SPEC 檔案
-3. 遇到矛盾時,**版本號較高者為準**(v3 > v2 > v1)
-4. 每份 SPEC 都有「§0 給接手 AI 的執行指令」和「§X 仲裁優先序」章節,那裡是真相
-5. Code 實作以 GitHub main branch 為準,SPEC 是設計意圖說明,不是實作證明
+**🌐 Live Demo**
+- 選股掃描:https://p0926330885.github.io/finreport-funnel/scanner.html
+- 個股詳細:https://p0926330885.github.io/finreport-funnel/stock.html
 
 ---
 
-## SPEC 演化史(依時間順序)
+## ✨ 產品特色
 
-| # | 檔案 | 日期 | 章節數 | 用途 |
-|:-:|---|---|---|---|
-| 1 | [SPEC-v2.2-detail-page.md](./SPEC-v2.2-detail-page.md) | 2026-08-22 | 20 章 | 個股詳細頁前端規格(定版) |
-| 2 | [SPEC-v2.1-to-v2.2-patch.md](./SPEC-v2.1-to-v2.2-patch.md) | 2026-08-22 | · | v2.1 → v2.2 差分 patch |
-| 3 | [SPEC-scanner-v1.md](./SPEC-scanner-v1.md) | 2026-08-22 | 25 章 | 選股掃描頁前端規格 |
-| 4 | [SPEC-scanner-v1.1-delta.md](./SPEC-scanner-v1.1-delta.md) | 2026-08-22 | · | Scanner 微調 delta |
-| 5 | [SPEC-pipeline-v1.md](./SPEC-pipeline-v1.md) | 2026-08-22 | 20 章 | 資料管線 v1(20 檔 demo) |
-| 6 | [SPEC-integration-v1.md](./SPEC-integration-v1.md) | 2026-08-22 | 15 章 | Layer 3.5 前端與資料整合 |
-| 7 | [SPEC-pipeline-v2.md](./SPEC-pipeline-v2.md) | 2026-08-23 | 12 章 | 全市場擴充 + 自動排程接力 |
-| 8 | [SPEC-insights-v3.md](./SPEC-insights-v3.md) | 2026-08-23 | 12 章 | 自動判讀引擎重構(11 商業模式)|
-| 9 | [DEPLOYMENT-SOP.md](./DEPLOYMENT-SOP.md) | 2026-08-22 | · | GitHub 部署上線手把手 SOP |
-
-**目前最新真相**:每個模組看下面對照表。
+- **📊 損益轉化漏斗**:視覺化營收 → 毛利 → 營業利益 → 淨利的每一段轉化率
+- **🧠 11 種商業模式判讀**:自動辨識定價權、營運槓桿、費用失控等情境,用白話解說
+- **🔍 多維度篩選**:毛利率、營益率、營收 YoY 等 slider 篩選 + 4 種策略模板
+- **📱 響應式設計**:手機、平板、桌機都能用
+- **🔄 每日自動更新**:GitHub Actions 每天台北時間 22:00 抓最新 FinMind 資料
+- **🆓 完全免費運行**:GitHub Pages + Actions,無 server 成本
 
 ---
 
-## 目前生效的 SPEC(2026-08-23 起)
+## 🎯 使用場景
 
-| 模組 | 現行 SPEC 版本 | 說明 |
-|---|---|---|
-| 個股詳細頁 前端 | **v2.2** + insights v3 章節替換 | 「落地率」已改「毛利轉化率」,自動判讀走 v3 |
-| 選股掃描頁 前端 | v1.1 delta 併入 v1 | 中文模糊搜尋加入(v2 前端交付時) |
-| 資料管線 | **v2**(全市場自動接力)| v1 已 supersede |
-| 前後端整合(Layer 3.5)| v1 | fetch 動態載入 + 錯誤防呆 |
-| 自動判讀引擎 | **v3.1**(LOCKED) | 11 商業模式 + fallback |
-| CL 隱藏規則 | v3 §6 | hasCL === false 時完整隱藏 |
+- 快速篩選符合特定財務條件的股票
+- 深入分析單一股票的損益結構
+- 判斷公司獲利是本業紮實還是業外美化
+- 追蹤季度成長率趨勢與轉折
 
 ---
 
-## 專案技術棧
-
-- **前端**:純 HTML + CSS + JS(Chart.js)· 無框架、無 build step
-- **資料管線**:Python 3.12 + pandas + pyarrow
-- **資料來源**:FinMind API(免費方案 500 req/hr)
-- **儲存**:JSON 檔案(每檔股票一個,約 2-3 KB)
-- **部署**:GitHub Actions + GitHub Pages(完全免費)
-- **排程**:
-  - Daily build:每天台北 22:00 增量更新
-  - Backfill scheduled:每天台北 03:30 分批補歷史(僅在 backfill 進行中)
-
----
-
-## 關鍵設計決策(給接手 AI 的心智地圖)
-
-### 為什麼用純靜態 + JSON,不用資料庫?
-
-- 免費運行(GitHub Pages + Actions)
-- 極致效能(CDN 直接吐 JSON,毫秒響應)
-- 零維運成本(不用管 server / DB)
-- 版本控制天然備份(每次 daily build 都是一個 git commit)
-
-### 為什麼判讀邏輯放 pipeline 而不是前端?
-
-- 一致性:所有股票判讀邏輯集中在一個地方
-- 效能:前端只 render,不算
-- 演化性:改判讀規則不需要動 HTML
-
-### 為什麼用「毛利轉化率」不用「營益率」?
-
-- 兩者定義不同:
-  - 營益率 = OP / Rev(每 100 元營收多少營益)
-  - 毛利轉化率 = OP / GP(每 100 元毛利留下多少營益)
-- 「毛利轉化率」精準反映**費用結構效率**,和「毛利率」+「營益率」形成三角互證
-- 名稱有故事性,契合「財報轉化漏斗」產品主題
-
-### 為什麼是「做 100 元生意」語意基座?
-
-- 損益表的自然順序(營收 → 毛利 → 營益)
-- 一元化基準,不同規模公司都用同一把尺
-- 直覺:「留下越多越好」正向一致,大腦不用轉換
-
----
-
-## 部署資訊
-
-- **repo**:`p0926330885/finreport-funnel`(Public)
-- **Pages**:main branch / (root)
-- **Secrets**:`FINMIND_TOKEN`(FinMind API 金鑰)
-- **Workflows**:
-  - `daily-build.yml`(cron `0 14 * * *` UTC = 22:00 TPE)
-  - `backfill-scheduled.yml`(cron `30 19 * * *` UTC = 03:30 TPE,僅在 backfill in_progress 時執行)
-  - `backfill.yml`(手動觸發,20 檔 demo mode)
-
----
-
-## 未來 v4 議題(記錄,不動)
-
-- 分頁載入(1700 檔全載入若太慢)
-- 加 alert 通知(某模式命中時推送)
-- 商業模式趨勢圖(連續幾季命中同一模式 = 結構性線索)
-- 產業橫比
-- 加入其他市場(美股 / 港股)
-
----
-
-## 給接手 AI 的仲裁優先序(全域)
-
-若不同 SPEC 之間有衝突:
+## 🏗️ 技術架構
 
 ```
-最新版本 SPEC
- > 較舊版本 SPEC(除非「舊」被明確標為 LOCKED)
- > README.md(本文)
- > code 實作(以 main branch 為準)
-```
-
-具體對照:
-
-```
-SPEC-insights-v3.1(LOCKED)   > 任何 v2.2 §11 自動判讀內容
-SPEC-pipeline-v2             > SPEC-pipeline-v1
-SPEC-scanner-v1.1 delta      > SPEC-scanner-v1 對應章節
-SPEC-integration-v1          > 舊有前端 hardcoded 資料
+┌─────────────────┐
+│  FinMind API    │  (資料來源, 免費 500 req/hr)
+└────────┬────────┘
+         │ 每天 22:00 TPE / 每月月營收公布日
+         ▼
+┌─────────────────┐
+│ GitHub Actions  │  (Python pipeline)
+│  ├── daily      │
+│  ├── backfill   │
+│  └── scheduled  │
+└────────┬────────┘
+         │ 產出 JSON
+         ▼
+┌─────────────────┐
+│  data/*.json    │  (每檔股票一個 ~2-3 KB)
+└────────┬────────┘
+         │ fetch
+         ▼
+┌─────────────────┐
+│ GitHub Pages    │  (純靜態 HTML/CSS/JS)
+│  ├── stock.html │
+│  └── scanner.html│
+└─────────────────┘
 ```
 
 ---
 
-## 聯絡 / 更新歷史
+## 📁 目錄結構
 
-- 2026-08-22:v2.2 交付、v1 pipeline 上線、20 檔 demo backfill 完成
-- 2026-08-23:v3 insights 引擎上線、pipeline v2 全市場擴充規劃、docs 資料夾建立
+```
+finreport-funnel/
+├── stock.html                    # 個股詳細頁
+├── scanner.html                  # 選股掃描頁
+├── data/                         # JSON 資料(pipeline 產出)
+│   ├── stocks/{id}.json          # 每檔股票詳細資料
+│   ├── scanner_index.json        # 選股掃描索引
+│   └── meta.json                 # 系統元資料
+├── pipeline/                     # Python 資料管線
+│   ├── build.py                  # 主流程
+│   ├── config.py                 # 常數 / universe 篩選
+│   ├── transform.py              # 業務指標計算 + insights 引擎
+│   ├── ingest.py                 # FinMind 資料抓取
+│   ├── finmind_client.py         # API client
+│   ├── output.py                 # 寫入 JSON
+│   ├── mock_data.py              # 本地測試用
+│   └── __init__.py
+├── .github/workflows/            # GitHub Actions 排程
+│   ├── daily-build.yml           # 每天 22:00 TPE
+│   ├── backfill-scheduled.yml    # 每天 03:30 TPE(全市場分批)
+│   └── backfill.yml              # 手動觸發(demo 20 檔)
+├── docs/                         # 專案設計文件(SPEC + SOP)
+│   ├── README.md                 # 文件索引
+│   ├── SPEC-*.md                 # 各版本規格書
+│   └── DEPLOYMENT-SOP.md         # 部署 SOP
+├── cache/                        # 資料快取(部分進 git)
+│   └── backfill_state.json       # backfill 進度追蹤
+├── requirements.txt              # Python 依賴
+├── .gitignore
+└── README.md                     # 你在看的檔案
+```
+
+---
+
+## 🚀 本機開發
+
+### 前置需求
+- Python 3.12+
+- FinMind API Token(免費申請 https://finmindtrade.com/)
+
+### 安裝
+
+```bash
+git clone https://github.com/p0926330885/finreport-funnel.git
+cd finreport-funnel
+pip install -r requirements.txt
+```
+
+### 執行 pipeline
+
+```bash
+# 20 檔 demo mode(用 mock 資料快速測試)
+FINMIND_MOCK=1 python -m pipeline.build --demo
+
+# 用真 FinMind 資料
+export FINMIND_TOKEN=你的_token
+python -m pipeline.build --demo
+
+# 全市場批次(v2)
+python -m pipeline.build --scheduled-batch
+```
+
+### 本機起 web server 測試前端
+
+```bash
+python -m http.server 8000
+# 瀏覽器打開 http://localhost:8000/scanner.html
+```
+
+---
+
+## 📖 文件
+
+完整設計 SPEC 和演化史請看 [`docs/`](./docs/) 資料夾。
+
+**新手建議閱讀順序**:
+1. [`docs/README.md`](./docs/README.md) · 文件索引(先看這個)
+2. [`docs/DEPLOYMENT-SOP.md`](./docs/DEPLOYMENT-SOP.md) · 部署上線 SOP
+3. [`docs/SPEC-insights-v3.md`](./docs/SPEC-insights-v3.md) · 最新判讀引擎(v3.1 LOCKED)
+
+---
+
+## 🔧 技術細節
+
+- **資料更新頻率**:
+  - 財報:季度公布日後隔天更新(3/5/8/11 月中旬)
+  - 月營收:每月 10 日左右
+  - Daily build:每天 22:00 TPE 增量更新
+- **資料範圍**:
+  - v1:DEMO_UNIVERSE 20 檔(上市權值股)
+  - v2:全市場 ~1,700 檔(規劃中,分 5 批自動接力)
+- **判讀引擎**:11 種商業模式 + fallback,見 [`docs/SPEC-insights-v3.md`](./docs/SPEC-insights-v3.md)
+
+---
+
+## 📄 授權
+
+- **程式碼**:MIT License
+- **資料**:遵守 [FinMind ToS](https://finmindtrade.com/)
+
+---
+
+## 🙏 致謝
+
+- **資料源**:[FinMind](https://finmindtrade.com/) · 台灣金融資料 API
+- **架構設計**:與 AI 協作完成(對話式產品開發實驗)
