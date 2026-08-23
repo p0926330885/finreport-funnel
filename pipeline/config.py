@@ -122,7 +122,8 @@ FS_FIELD_MAP = {
 # BS 科目對照 (合約負債-流動)
 BS_FIELD_MAP = {
     "cl": [
-        "ContractLiabilities-Current",   # SPEC 原值(舊)
+        "CurrentContractLiabilities",    # ← FinMind 真名(Current 在前,v3.3 log 確認)
+        "ContractLiabilities-Current",   # SPEC 原值(備用)
         "ContractLiabilitiesCurrent",    # 無破折號
         "ContractLiabilities",           # 無 -Current 後綴
         "ContractLiability-Current",     # 單數 Liability
