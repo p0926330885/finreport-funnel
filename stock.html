@@ -2030,7 +2030,7 @@ function growthRows() {
     const priorIndex = index - 4;
     const priorRevCum = priorIndex >= 0 ? cumulativeValue(rows, priorIndex, 'rev') : null;
     const priorEpsCum = priorIndex >= 0 ? cumulativeValue(rows, priorIndex, 'eps') : null;
-    return ({ ...row, revCum, revCumYoY: rate(revCum, priorRevCum), epsCum, epsCumYoY: rate(epsCum, priorEpsCum) }).slice().reverse();
+    return { ...row, revCum, revCumYoY: rate(revCum, priorRevCum), epsCum, epsCumYoY: rate(epsCum, priorEpsCum) };
   });
 }
 
