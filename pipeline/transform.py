@@ -622,32 +622,44 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
     merged = fs_wide.merge(bs_wide, on="date", how="left").fillna({"cl": 0})
     merged = merged.tail(FULL_QUARTERS).reset_index(drop=True)
 
-    # 內部 helper: 安全百分比變化 (今 vs 過去), 若基期 ~0 或缺值返回 None
-    def _y(now, past):
-        if now is None or past is None:
+    # 內部 helper: 安全數值轉換,None/NaN/Inf 統一返 None
+    # 修 v3.3:金融股某些季度 FinMind 未 populate EPS (返 NaN),需清理避免 JSON 產生 NaN token
+    def _n(x, digits=None):
+        if x is None:
             return None
         try:
-            p = float(past)
-            if abs(p) < 0.01:
+            v = float(x)
+            if v != v or v == float('inf') or v == float('-inf'):  # NaN or Inf
                 return None
-            return round((float(now) / p - 1) * 100, 1)
+            if digits is None:
+                return int(round(v))
+            return round(v, digits)
         except (TypeError, ValueError):
             return None
+
+    # 內部 helper: 安全百分比變化 (今 vs 過去), 若基期 ~0 / 缺值 / NaN 返回 None
+    def _y(now, past):
+        n = _n(now, 4)
+        p = _n(past, 4)
+        if n is None or p is None or abs(p) < 0.01:
+            return None
+        return round((n / p - 1) * 100, 1)
 
     # 先建 full_quarterly (24 筆) 含各 YoY/QoQ
     full_quarterly = []
     for i, row in merged.iterrows():
         py = merged.iloc[i - 4].to_dict() if i >= 4 else None
         pq = merged.iloc[i - 1].to_dict() if i >= 1 else None
+        noi_val = _n(row["noi"], 1)
         full_quarterly.append({
             "q":   _q_label(str(row["date"])[:10]),
-            "cl":  round(float(row["cl"])),
-            "rev": round(float(row["rev"])),
-            "gp":  round(float(row["gp"])) if row["gp"] is not None else None,
-            "op":  round(float(row["op"])) if row["op"] is not None else None,
-            "noi": round(float(row["noi"]), 1) if row["noi"] is not None else 0,
-            "np":  round(float(row["np"])) if row["np"] is not None else None,
-            "eps": round(float(row["eps"]), 2) if row["eps"] is not None else None,
+            "cl":  _n(row["cl"]) or 0,
+            "rev": _n(row["rev"]) or 0,
+            "gp":  _n(row["gp"]),
+            "op":  _n(row["op"]),
+            "noi": noi_val if noi_val is not None else 0,
+            "np":  _n(row["np"]),
+            "eps": _n(row["eps"], 2),
             # v3.2: pipeline 直接產出 YoY/QoQ,前端不再自算
             "revYoY": _y(row["rev"], py["rev"]) if py else None,
             "gpYoY":  _y(row["gp"],  py["gp"])  if py else None,
@@ -670,6 +682,7 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
     for i, item in enumerate(full_quarterly):
         year = _year_of(item["q"])
         same_year_slice = [x for x in full_quarterly[: i + 1] if _year_of(x["q"]) == year]
+        # 累加時 None 視為 0 (已在 _n 內確保無 NaN)
         item["revCum"] = sum((x["rev"] or 0) for x in same_year_slice)
         item["epsCum"] = round(sum((x["eps"] or 0) for x in same_year_slice), 2)
     # 累計 YoY:必須「當前年累加季數」== 「去年同期年累加季數」才有比較意義。
