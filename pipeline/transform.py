@@ -549,38 +549,64 @@ def _fs_pivot(fs_df: pd.DataFrame) -> pd.DataFrame:
     FinMind FS returns long format: (date, stock_id, type, value).
     Pivot to wide format with columns rev/gp/op/np/eps/noi.
 
-    All monetary values divided by 1000 (千元 -> 百萬).
+    v3.3: FS_FIELD_MAP 改為 {dst: [候選 1, 候選 2, ...]},逐一嘗試。
+    若全部 miss,log 實際 wide.columns 前 30 個到 GitHub Actions,方便反查真名。
+
+    All monetary values divided by 1_000_000 (元 -> 百萬).
     """
     if fs_df.empty:
         return pd.DataFrame()
     wide = fs_df.pivot_table(
         index="date", columns="type", values="value", aggfunc="first"
     ).reset_index()
-    for src, dst in config.FS_FIELD_MAP.items():
-        if src in wide.columns:
+    # Debug: 列出實際的 type 值,幫助日後反查對映
+    log.info("FS wide.columns (first 40): %s", list(wide.columns)[:40])
+    for dst, candidates in config.FS_FIELD_MAP.items():
+        matched = None
+        for src in candidates:
+            if src in wide.columns:
+                matched = src
+                break
+        if matched:
             if dst == "eps":
-                wide[dst] = wide[src]  # EPS 已是元
+                wide[dst] = wide[matched]  # EPS 已是元
             else:
-                wide[dst] = wide[src] / 1_000_000  # 元 -> 百萬
+                wide[dst] = wide[matched] / 1_000_000  # 元 -> 百萬
+            if matched != candidates[0]:
+                # 用了非第一候選,值得 log 提醒(SPEC 過期了)
+                log.info("FS field '%s' matched candidate '%s' (not first)", dst, matched)
         else:
+            log.warning("FS field '%s' has NO match in candidates: %s", dst, candidates)
             wide[dst] = None
-    keep = ["date"] + list(config.FS_FIELD_MAP.values())
+    keep = ["date"] + list(config.FS_FIELD_MAP.keys())
     return wide[keep].sort_values("date").reset_index(drop=True)
 
 
 def _bs_pivot(bs_df: pd.DataFrame) -> pd.DataFrame:
     """
     Pivot BS long -> wide, extract contract liabilities.
+
+    v3.3: BS_FIELD_MAP 改為 {dst: [候選 1, 候選 2, ...]},逐一嘗試。
     """
     if bs_df.empty:
         return pd.DataFrame(columns=["date", "cl"])
     wide = bs_df.pivot_table(
         index="date", columns="type", values="value", aggfunc="first"
     ).reset_index()
-    for src, dst in config.BS_FIELD_MAP.items():
-        if src in wide.columns:
-            wide[dst] = wide[src] / 1_000_000
+    # Debug: 列出實際的 type 值
+    log.info("BS wide.columns (first 40): %s", list(wide.columns)[:40])
+    for dst, candidates in config.BS_FIELD_MAP.items():
+        matched = None
+        for src in candidates:
+            if src in wide.columns:
+                matched = src
+                break
+        if matched:
+            wide[dst] = wide[matched] / 1_000_000
+            if matched != candidates[0]:
+                log.info("BS field '%s' matched candidate '%s' (not first)", dst, matched)
         else:
+            log.warning("BS field '%s' has NO match in candidates: %s", dst, candidates)
             wide[dst] = 0
     return wide[["date", "cl"]].sort_values("date").reset_index(drop=True)
 

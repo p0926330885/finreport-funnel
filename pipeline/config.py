@@ -96,23 +96,38 @@ INDUSTRY_DEFAULT = "traditional"
 # ============================================================
 # FinMind FS 科目 -> 我方欄位對照 (SPEC §5.2)
 # 註: FinMind FS API 回傳結構為 (date, stock_id, type, value)
-# type 值來自財報 XBRL 標籤, 常見值如下 (以 FinMind 實際欄位為準,
-# 若有變動需在此表更新)
+# type 值來自財報 XBRL 標籤,常見值如下。
+#
+# v3.3 改為多重候選清單:每個內部欄位提供多個可能的 FinMind key。
+# _fs_pivot / _bs_pivot 會依序嘗試,取第一個 match 的。
+# 若全部 miss,transform.py 內的 log.info 會列出實際 wide.columns,
+# 方便日後從 GitHub Actions log 反查真名再更新此表。
 # ============================================================
 FS_FIELD_MAP = {
-    "Revenue":                          "rev",   # 營業收入合計
-    "GrossProfit":                      "gp",    # 營業毛利 (毛損)淨額
-    "OperatingIncome":                  "op",    # 營業利益
-    "IncomeAfterTaxes":                 "np",    # 本期淨利 (淨損)
-    "EPS":                              "eps",   # 基本每股盈餘
-    # 業外 = 稅前淨利 - 營業利益
-    # 或直接 NonoperatingIncomeAndExpenses (視 FinMind 是否提供)
-    "TotalNonoperatingIncomeAndExpenses": "noi",
+    "rev": ["Revenue"],
+    "gp":  ["GrossProfit"],
+    "op":  ["OperatingIncome"],
+    "np":  ["IncomeAfterTaxes"],
+    "eps": ["EPS"],
+    # 業外收支(合計):FinMind 可能用多種命名,依序嘗試
+    "noi": [
+        "TotalNonoperatingIncomeAndExpenses",   # SPEC 原值(舊)
+        "NonoperatingIncomeAndExpenses",        # 無 Total 前綴
+        "TotalNonOperatingIncomeAndExpense",    # 單數 Expense
+        "NonOperatingIncomeAndExpense",         # 無 Total + 單數
+        "NonOperatingIncome",                   # 只有 Income
+    ],
 }
 
-# BS 科目對照 (合約負債)
+# BS 科目對照 (合約負債-流動)
 BS_FIELD_MAP = {
-    "ContractLiabilities-Current": "cl",     # 合約負債 - 流動
+    "cl": [
+        "ContractLiabilities-Current",   # SPEC 原值(舊)
+        "ContractLiabilitiesCurrent",    # 無破折號
+        "ContractLiabilities",           # 無 -Current 後綴
+        "ContractLiability-Current",     # 單數 Liability
+        "ContractLiability",             # 單數 + 無後綴
+    ],
 }
 
 # ============================================================
