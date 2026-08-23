@@ -35,8 +35,9 @@ DATASETS = {
 # Business constants (matches SPEC v2.2 §7, Scanner §7.5)
 # ============================================================
 HAS_CL_THRESHOLD = 0.15                  # v2.2 §4.2: max(近8Q CL) / max(近8Q rev) > 0.15
-QUARTERLY_HISTORY_QUARTERS = 20           # Detail 頁 8 季
-MONTHLY_HISTORY_MONTHS = 60              # 24 for 12MA + 2 buffer
+QUARTERLY_HISTORY_QUARTERS = 20          # Detail 頁 20 季 (5 年)
+QUARTERLY_YOY_BUFFER = 4                 # 額外拉 4 季,用於算最終 20 季前 4 季的 YoY (不出現在輸出)
+MONTHLY_HISTORY_MONTHS = 60              # 60 for 5-year history (still supports 12MA)
 GOLDEN_CROSS_LOOKBACK_DAYS = 30          # Scanner §7.6
 
 THRESHOLD_TO_YI = 50000                  # v2.2 §23 (百萬 -> 億 切換閾值)

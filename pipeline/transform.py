@@ -617,18 +617,29 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
         log.warning("No FS data for %s", stock_id)
         return None
 
-    # Merge FS + BS by date, take latest 8 quarters
+    # Merge FS + BS by date. 拉 20+4 buffer = 24 季,前 4 只用於算 YoY 不出現在輸出
+    FULL_QUARTERS = config.QUARTERLY_HISTORY_QUARTERS + config.QUARTERLY_YOY_BUFFER
     merged = fs_wide.merge(bs_wide, on="date", how="left").fillna({"cl": 0})
-    merged = merged.tail(config.QUARTERLY_HISTORY_QUARTERS).reset_index(drop=True)
+    merged = merged.tail(FULL_QUARTERS).reset_index(drop=True)
 
-    # hasCL determination (v2.2 §4.2)
-    max_cl = merged["cl"].max()
-    max_rev = merged["rev"].max()
-    has_cl = bool(max_rev and (max_cl / max_rev) > config.HAS_CL_THRESHOLD)
+    # 內部 helper: 安全百分比變化 (今 vs 過去), 若基期 ~0 或缺值返回 None
+    def _y(now, past):
+        if now is None or past is None:
+            return None
+        try:
+            p = float(past)
+            if abs(p) < 0.01:
+                return None
+            return round((float(now) / p - 1) * 100, 1)
+        except (TypeError, ValueError):
+            return None
 
-    quarterly = []
-    for _, row in merged.iterrows():
-        quarterly.append({
+    # 先建 full_quarterly (24 筆) 含各 YoY/QoQ
+    full_quarterly = []
+    for i, row in merged.iterrows():
+        py = merged.iloc[i - 4].to_dict() if i >= 4 else None
+        pq = merged.iloc[i - 1].to_dict() if i >= 1 else None
+        full_quarterly.append({
             "q":   _q_label(str(row["date"])[:10]),
             "cl":  round(float(row["cl"])),
             "rev": round(float(row["rev"])),
@@ -637,7 +648,46 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
             "noi": round(float(row["noi"]), 1) if row["noi"] is not None else 0,
             "np":  round(float(row["np"])) if row["np"] is not None else None,
             "eps": round(float(row["eps"]), 2) if row["eps"] is not None else None,
+            # v3.2: pipeline 直接產出 YoY/QoQ,前端不再自算
+            "revYoY": _y(row["rev"], py["rev"]) if py else None,
+            "gpYoY":  _y(row["gp"],  py["gp"])  if py else None,
+            "opYoY":  _y(row["op"],  py["op"])  if py else None,
+            "npYoY":  _y(row["np"],  py["np"])  if py else None,
+            "epsYoY": _y(row["eps"], py["eps"]) if py else None,
+            "clYoY":  _y(row["cl"],  py["cl"])  if py else None,
+            "revQoQ": _y(row["rev"], pq["rev"]) if pq else None,
+            "gpQoQ":  _y(row["gp"],  pq["gp"])  if pq else None,
+            "opQoQ":  _y(row["op"],  pq["op"])  if pq else None,
+            "npQoQ":  _y(row["np"],  pq["np"])  if pq else None,
+            "epsQoQ": _y(row["eps"], pq["eps"]) if pq else None,
+            "clQoQ":  _y(row["cl"],  pq["cl"])  if pq else None,
         })
+
+    # 算當年累加 revCum/epsCum,再算 revCumYoY/epsCumYoY (i-4 期比較)
+    def _year_of(q_label):
+        return q_label.split("/")[0]
+
+    for i, item in enumerate(full_quarterly):
+        year = _year_of(item["q"])
+        same_year_slice = [x for x in full_quarterly[: i + 1] if _year_of(x["q"]) == year]
+        item["revCum"] = sum((x["rev"] or 0) for x in same_year_slice)
+        item["epsCum"] = round(sum((x["eps"] or 0) for x in same_year_slice), 2)
+    for i, item in enumerate(full_quarterly):
+        if i >= 4:
+            py = full_quarterly[i - 4]
+            item["revCumYoY"] = _y(item["revCum"], py["revCum"])
+            item["epsCumYoY"] = _y(item["epsCum"], py["epsCum"])
+        else:
+            item["revCumYoY"] = None
+            item["epsCumYoY"] = None
+
+    # 截尾成最終 QUARTERLY_HISTORY_QUARTERS 季輸出 (前 4 buffer 丟棄)
+    quarterly = full_quarterly[-config.QUARTERLY_HISTORY_QUARTERS:]
+
+    # hasCL determination (v2.2 §4.2) — 用最終 quarterly (20 季) 判斷
+    max_cl = max((x["cl"] for x in quarterly), default=0)
+    max_rev = max((x["rev"] for x in quarterly), default=0)
+    has_cl = bool(max_rev and (max_cl / max_rev) > config.HAS_CL_THRESHOLD)
 
     # Monthly: 26 months, [year-month, revenue]
     monthly = []

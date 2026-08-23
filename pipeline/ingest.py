@@ -71,7 +71,7 @@ def fetch_financial_statements(client: FinMindClient, stock_id: str, force: bool
     if not force and _is_cache_fresh(path, CACHE_TTL_QUARTERLY_DAYS):
         return pd.read_parquet(path)
 
-    rows = client.fetch(dataset, data_id=stock_id, start_date="2021-01-01")
+    rows = client.fetch(dataset, data_id=stock_id, start_date="2020-01-01")
     if not rows:
         if path.exists():
             return pd.read_parquet(path)
@@ -88,7 +88,7 @@ def fetch_balance_sheet(client: FinMindClient, stock_id: str, force: bool = Fals
     if not force and _is_cache_fresh(path, CACHE_TTL_QUARTERLY_DAYS):
         return pd.read_parquet(path)
 
-    rows = client.fetch(dataset, data_id=stock_id, start_date="2021-01-01")
+    rows = client.fetch(dataset, data_id=stock_id, start_date="2020-01-01")
     if not rows:
         if path.exists():
             return pd.read_parquet(path)
@@ -105,7 +105,7 @@ def fetch_month_revenue(client: FinMindClient, stock_id: str, force: bool = Fals
     if not force and _is_cache_fresh(path, CACHE_TTL_MONTHLY_DAYS):
         return pd.read_parquet(path)
 
-    rows = client.fetch(dataset, data_id=stock_id, start_date="2021-01-01")
+    rows = client.fetch(dataset, data_id=stock_id, start_date="2020-01-01")
     if not rows:
         if path.exists():
             return pd.read_parquet(path)
