@@ -1368,8 +1368,8 @@ body[data-status="ok"] .status-panel { display: none; }
 
 [hidden] { display: none !important; }
 
-/* v3: hasCL false 時隱藏 CL 相關 UI */
-[data-view-tab="cl"][hidden] { display: none !important; }
+/* v3.3: hasCL false 時隱藏 CL 相關 UI (view-tabs 用 data-view, growth-tabs 用 data-growth) */
+[data-view="cl"][hidden], [data-growth="cl"][hidden] { display: none !important; }
 
 /* v3 insights: tone 顏色差異化 */
 .insight-card[data-tone="mint"]  { border-left: 3px solid var(--mint); }
@@ -2608,9 +2608,10 @@ async function boot() {
 
     // === end Layer 3.5 fix ===
 
-    // v3: hasCL false 時隱藏 CL 相關 UI (SPEC-insights-v3 section 6)
+    // v3.3: hasCL false 時隱藏 CL 相關 UI (SPEC-insights-v3 section 6)
+    // 修 v3.3: 舊選擇器 [data-view-tab="cl"] 打錯,實際 button 屬性是 data-view="cl"
     if (!stock.hasCL) {
-      document.querySelectorAll('[data-view-tab="cl"], [data-growth="cl"], .growth-tab[data-growth="cl"]').forEach(el => {
+      document.querySelectorAll('[data-view="cl"], [data-growth="cl"], .growth-tab[data-growth="cl"]').forEach(el => {
         el.hidden = true;
       });
       // fallback state
