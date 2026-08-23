@@ -134,7 +134,7 @@ a { color: inherit; text-decoration: none; }
 }
 .field select:focus { border-color: var(--brass-line); }
 .range-control { --low: 0%; --high: 100%; }
-.range-stack { position: relative; height: 26px; }
+.range-stack { position: relative; height: 26px; touch-action: pan-y; }
 .range-stack::before, .range-stack::after {
   content: ''; position: absolute; left: 0; right: 0; top: 11px; height: 4px; border-radius: 4px;
 }
@@ -142,20 +142,54 @@ a { color: inherit; text-decoration: none; }
 .range-stack::after { left: var(--low); right: calc(100% - var(--high)); background: var(--slider-track-active); }
 .range-stack input[type="range"] {
   position: absolute; inset: 0; width: 100%; height: 26px; appearance: none; background: transparent;
-  pointer-events: none; outline: none; z-index: 2;
+  pointer-events: none; outline: none; z-index: 2; touch-action: pan-y;
 }
 .range-stack input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: transparent; }
 .range-stack input[type="range"]::-webkit-slider-thumb {
   appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
   background: var(--slider-thumb); border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--brass-line);
   pointer-events: auto; cursor: grab;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
 .range-stack input[type="range"]::-moz-range-track { height: 4px; background: transparent; }
 .range-stack input[type="range"]::-moz-range-thumb {
   width: 14px; height: 14px; border-radius: 50%; background: var(--slider-thumb); border: 2px solid var(--panel);
   pointer-events: auto; cursor: grab;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
-.range-stack input[type="range"]:hover::-webkit-slider-thumb { background: var(--slider-thumb-hover); }
+/* Hover 樣式只在真有 hover 的裝置(桌機)生效,避免手機把手卡在 hover 狀態 */
+@media (hover: hover) {
+  .range-stack input[type="range"]:hover::-webkit-slider-thumb { background: var(--slider-thumb-hover); }
+  .range-stack input[type="range"]:hover::-moz-range-thumb { background: var(--slider-thumb-hover); }
+}
+/* Dragging state:把手放大 + brass 發光光暈,提供拖動視覺回饋 */
+.range-stack input[type="range"].dragging::-webkit-slider-thumb {
+  transform: scale(1.3); background: var(--brass-hi);
+  box-shadow: 0 0 0 4px var(--brass-dim), 0 0 8px var(--brass-line);
+  cursor: grabbing;
+}
+.range-stack input[type="range"].dragging::-moz-range-thumb {
+  transform: scale(1.3); background: var(--brass-hi);
+  box-shadow: 0 0 0 4px var(--brass-dim), 0 0 8px var(--brass-line);
+  cursor: grabbing;
+}
+/* 觸控裝置(手機/平板):把手 22px 好按,輸入框加大 60px 寬 32px 高 */
+@media (hover: none) and (pointer: coarse) {
+  .range-stack { height: 34px; }
+  .range-stack::before, .range-stack::after { top: 15px; }
+  .range-stack input[type="range"] { height: 34px; }
+  .range-stack input[type="range"]::-webkit-slider-thumb {
+    width: 22px; height: 22px; margin-top: -9px;
+  }
+  .range-stack input[type="range"]::-moz-range-thumb {
+    width: 22px; height: 22px;
+  }
+  .range-stack input[type="range"].dragging::-webkit-slider-thumb { transform: scale(1.2); }
+  .range-stack input[type="range"].dragging::-moz-range-thumb { transform: scale(1.2); }
+  .range-inputs { gap: 8px; margin: 6px 0 8px; }
+  .range-inputs input[type="number"] { min-width: 60px; height: 32px; font-size: 13px; }
+  .range-control + .range-control { margin-top: 18px; }
+}
 .range-value { color: var(--text-dim); font: 500 11px var(--font-num); margin-top: 2px; }
 .range-inputs { display: flex; align-items: center; gap: 6px; margin: 5px 0 6px; }
 .range-inputs input[type="number"] {
@@ -388,17 +422,17 @@ body[data-status="ok"] .status-panel { display: none; }
         <h4>財務健康度</h4>
         <div class="range-control" data-range="gm" data-tooltip="毛利 ÷ 營收。反映產品定價力與成本控制。≥25% 綠 / 15–25% 黃 / <15% 紅。">
           <span class="range-label">毛利率</span>
-          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="毛利率最低值" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="毛利率最高值" inputmode="decimal"><span class="range-unit">%</span></div>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="毛利率最低值" inputmode="numeric"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="毛利率最高值" inputmode="numeric"><span class="range-unit">%</span></div>
           <div class="range-stack"><input type="range" data-bound="min" aria-label="毛利率最低值"><input type="range" data-bound="max" aria-label="毛利率最高值"></div>
         </div>
         <div class="range-control" data-range="om" data-tooltip="營業利益 ÷ 營收。反映本業獲利能力。≥8% 綠 / 3–8% 黃 / <3% 紅。">
           <span class="range-label">營益率</span>
-          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="營益率最低值" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="營益率最高值" inputmode="decimal"><span class="range-unit">%</span></div>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="營益率最低值" inputmode="numeric"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="營益率最高值" inputmode="numeric"><span class="range-unit">%</span></div>
           <div class="range-stack"><input type="range" data-bound="min" aria-label="營益率最低值"><input type="range" data-bound="max" aria-label="營益率最高值"></div>
         </div>
         <div class="range-control" data-range="nm" data-tooltip="淨利 ÷ 營收。≥5% 綠 / 0–5% 黃 / <0% 紅。">
           <span class="range-label">淨利率</span>
-          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="淨利率最低值" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="淨利率最高值" inputmode="decimal"><span class="range-unit">%</span></div>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="淨利率最低值" inputmode="numeric"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="淨利率最高值" inputmode="numeric"><span class="range-unit">%</span></div>
           <div class="range-stack"><input type="range" data-bound="min" aria-label="淨利率最低值"><input type="range" data-bound="max" aria-label="淨利率最高值"></div>
         </div>
       </section>
@@ -407,7 +441,7 @@ body[data-status="ok"] .status-panel { display: none; }
         <h4>成長動能</h4>
         <div class="range-control" data-range="revYoY" data-tooltip="相較去年同期營收的變化百分比。>15% 為強勁成長。">
           <span class="range-label">營收 YoY</span>
-          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="營收年增率最低值" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="營收年增率最高值" inputmode="decimal"><span class="range-unit">%</span></div>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="營收年增率最低值" inputmode="numeric"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="營收年增率最高值" inputmode="numeric"><span class="range-unit">%</span></div>
           <div class="range-stack"><input type="range" data-bound="min" aria-label="營收年增率最低值"><input type="range" data-bound="max" aria-label="營收年增率最高值"></div>
         </div>
       </section>
@@ -416,7 +450,7 @@ body[data-status="ok"] .status-panel { display: none; }
         <h4>訂單能見度</h4>
         <div class="range-control" data-range="clYoY" data-tooltip="合約負債期末相較去年同期的變化。>30% 為訂單池強勁累積,<0% 為訂單轉弱。啟用此條件會自動排除無合約負債的股票。">
           <span class="range-label">合約負債 YoY</span>
-          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="合約負債年增率最低值" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="合約負債年增率最高值" inputmode="decimal"><span class="range-unit">%</span></div>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="合約負債年增率最低值" inputmode="numeric"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="合約負債年增率最高值" inputmode="numeric"><span class="range-unit">%</span></div>
           <div class="range-stack"><input type="range" data-bound="min" aria-label="合約負債年增率最低值"><input type="range" data-bound="max" aria-label="合約負債年增率最高值"></div>
         </div>
         <div class="range-control" data-range="vis" data-tooltip="合約負債 ÷ 該季 3 個月平均月營收。啟用此條件會自動排除無合約負債的股票。">
@@ -518,9 +552,9 @@ const rangeDefs = {
   gm: { label: '毛利率', min: 0, max: 100, step: 1, unit: '%' },
   om: { label: '營益率', min: -20, max: 100, step: 1, unit: '%' },
   nm: { label: '淨利率', min: -30, max: 100, step: 1, unit: '%' },
-  revYoY: { label: '營收 YoY', min: -100, max: 500, step: 5, unit: '%' },
-  clYoY: { label: '合約負債 YoY', min: -100, max: 500, step: 5, unit: '%' },
-  vis: { label: '能見度月數', min: 0, max: 24, step: 0.5, unit: ' 個月' },
+  revYoY: { label: '營收 YoY', min: -100, max: 500, step: 1, unit: '%' },
+  clYoY: { label: '合約負債 YoY', min: -100, max: 500, step: 1, unit: '%' },
+  vis: { label: '能見度月數', min: 0, max: 24, step: 0.1, unit: ' 個月' },
 };
 const templates = {
   'order-pile-up': { ranges: { clYoY: [30, 500], revYoY: [15, 500] } },
@@ -770,7 +804,7 @@ function updateHitStat() {
 }
 function renderAll() { renderControls(); renderResults(); }
 
-const applyRangeChange = debounce(() => { state.page = 1; renderAll(); syncUrl('replace'); }, 200);
+const applyRangeChange = debounce(() => { state.page = 1; renderAll(); syncUrl('replace'); }, 300);
 function bindControls() {
   document.querySelectorAll('.range-control').forEach(control => {
     const key = control.dataset.range;
@@ -829,6 +863,19 @@ function bindControls() {
       });
     });
   });
+
+  // Dragging state:pointer 按下時把手 highlight 放大,鬆開時恢復
+  // 提供拖動視覺回饋,尤其手機更需要 (thumb 22px 放大到 26px + brass 光暈)
+  document.querySelectorAll('.range-control input[type="range"]').forEach(input => {
+    input.addEventListener('pointerdown', () => input.classList.add('dragging'));
+  });
+  const _stopDrag = () => {
+    document.querySelectorAll('.range-control input[type="range"].dragging')
+      .forEach(el => el.classList.remove('dragging'));
+  };
+  document.addEventListener('pointerup', _stopDrag);
+  document.addEventListener('pointercancel', _stopDrag);
+
   document.getElementById('industrySelect').addEventListener('change', event => { state.industry = event.target.value; state.template = null; state.page = 1; renderAll(); syncUrl('replace'); });
   document.getElementById('marketSelect').addEventListener('change', event => { state.market = event.target.value; state.template = null; state.page = 1; renderAll(); syncUrl('replace'); });
   document.getElementById('gcToggle').addEventListener('change', event => { state.gc = event.target.checked; state.template = null; state.page = 1; renderAll(); syncUrl('replace'); });
@@ -865,6 +912,9 @@ function openDrawer() { document.getElementById('filterPanel').classList.add('op
 function closeDrawer() { document.getElementById('filterPanel').classList.remove('open'); document.getElementById('drawerOverlay').classList.remove('open'); document.body.classList.remove('drawer-open'); }
 
 const tooltipFloat = document.getElementById('tooltipFloat');
+// 觸控裝置判斷:手機/平板 tap 會觸發 mouseover 相容事件,但沒有 mouseout,
+// 導致 tooltip 卡住不消失。因此在觸控裝置直接關掉 tooltip 顯示。
+const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 function showTooltip(target) {
   const text = target.dataset.tooltip;
   if (!text) return;
@@ -878,10 +928,12 @@ function showTooltip(target) {
   tooltipFloat.style.left = `${left}px`; tooltipFloat.style.top = `${Math.max(8, top)}px`;
 }
 function hideTooltip() { tooltipFloat.classList.remove('show'); }
-document.addEventListener('mouseover', event => { const target = event.target.closest('[data-tooltip]'); if (target) showTooltip(target); });
-document.addEventListener('mouseout', event => { if (event.target.closest('[data-tooltip]')) hideTooltip(); });
-document.addEventListener('focusin', event => { const target = event.target.closest('[data-tooltip]'); if (target) showTooltip(target); });
-document.addEventListener('focusout', hideTooltip);
+document.addEventListener('mouseover', event => { if (isTouchDevice) return; const target = event.target.closest('[data-tooltip]'); if (target) showTooltip(target); });
+document.addEventListener('mouseout', event => { if (isTouchDevice) return; if (event.target.closest('[data-tooltip]')) hideTooltip(); });
+document.addEventListener('focusin', event => { if (isTouchDevice) return; const target = event.target.closest('[data-tooltip]'); if (target) showTooltip(target); });
+document.addEventListener('focusout', () => { if (isTouchDevice) return; hideTooltip(); });
+// 保險:若 tooltip 因任何原因卡在畫面上,tap 任何地方就強制隱藏
+document.addEventListener('pointerdown', event => { if (event.pointerType !== 'mouse') hideTooltip(); });
 
 async function boot() {
   setStatus('loading');

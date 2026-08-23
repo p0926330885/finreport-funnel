@@ -2414,17 +2414,24 @@ function scheduleTooltip(target) {
 }
 
 function bindTooltipDelegation() {
+  // 觸控裝置判斷:手機/平板 tap 觸發 mouseover 相容事件但沒有 mouseout,
+  // 導致 tooltip 卡住不消失。直接關掉 tooltip 顯示。
+  const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
   document.addEventListener('mouseover', event => {
+    if (isTouchDevice) return;
     const target = event.target.closest('[data-tooltip]');
     if (target && !target.contains(event.relatedTarget)) scheduleTooltip(target);
   });
   document.addEventListener('mouseout', event => {
+    if (isTouchDevice) return;
     const target = event.target.closest('[data-tooltip]');
     if (target && !target.contains(event.relatedTarget)) hideTooltip();
   });
-  document.addEventListener('focusin', event => { const target = event.target.closest('[data-tooltip]'); if (target) scheduleTooltip(target); });
-  document.addEventListener('focusout', hideTooltip);
+  document.addEventListener('focusin', event => { if (isTouchDevice) return; const target = event.target.closest('[data-tooltip]'); if (target) scheduleTooltip(target); });
+  document.addEventListener('focusout', () => { if (isTouchDevice) return; hideTooltip(); });
   window.addEventListener('scroll', hideTooltip, { passive: true });
+  // 保險:tap 任何地方強制隱藏 tooltip(避免卡住)
+  document.addEventListener('pointerdown', event => { if (event.pointerType !== 'mouse') hideTooltip(); });
 }
 
 /* =========================================================
