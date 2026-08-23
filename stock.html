@@ -1030,8 +1030,7 @@ table.data tbody tr.selected td {
 }
 
 table.data .growth-selected {
-  color: var(--mint);
-  background: var(--mint-dim);
+  /* v2 fix: 取消欄位高亮 (原 mint 底色移除) */
 }
 
 .val-pos { color: var(--mint); }
@@ -1285,7 +1284,7 @@ tr:focus-visible {
 .ma-toggle.hidden-line { text-decoration: line-through; }
 .ma-toggle.hidden-line .swatch { opacity: 0.3; }
 .ma-toggle:disabled { color: var(--text-muted); cursor: default; opacity: 0.55; }
-.ma3 { color: var(--brass); }
+.ma3 { color: #5eead4; }
 .ma6 { color: var(--amber); }
 .ma12 { color: var(--text-dim); }
 
@@ -1351,10 +1350,10 @@ body[data-status="ok"] .status-panel { display: none; }
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">
+  <a href="./scanner.html" class="brand" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px;cursor:pointer;" data-tooltip="回到選股掃描">
     <div class="brand-mark">F</div>
     <div class="brand-text">財報轉化漏斗<span class="sub">Financial Conversion Funnel</span></div>
-  </div>
+  </a>
   <nav class="nav-tabs" aria-label="主要導覽">
     <button class="nav-tab">選股掃描</button>
     <button class="nav-tab active" aria-current="page">個股詳細</button>
@@ -1391,7 +1390,10 @@ body[data-status="ok"] .status-panel { display: none; }
       </div>
     </div>
     <div class="hero-right">
-      <button class="q-picker" id="qPicker" aria-label="循環切換季度"><span id="qPickerLabel">2026/2Q</span><span class="caret">▼</span></button>
+      <div class="q-picker-wrap" style="position:relative;">
+        <button class="q-picker" id="qPicker" aria-label="選擇季度"><span id="qPickerLabel">2026/2Q</span><span class="caret">▼</span></button>
+        <div class="q-dropdown" id="qDropdown" hidden style="position:absolute;top:calc(100% + 4px);right:0;min-width:120px;max-height:400px;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:200;padding:4px 0;"></div>
+      </div>
     </div>
   </div>
 
@@ -2028,7 +2030,7 @@ function growthRows() {
     const priorIndex = index - 4;
     const priorRevCum = priorIndex >= 0 ? cumulativeValue(rows, priorIndex, 'rev') : null;
     const priorEpsCum = priorIndex >= 0 ? cumulativeValue(rows, priorIndex, 'eps') : null;
-    return { ...row, revCum, revCumYoY: rate(revCum, priorRevCum), epsCum, epsCumYoY: rate(epsCum, priorEpsCum) };
+    return ({ ...row, revCum, revCumYoY: rate(revCum, priorRevCum), epsCum, epsCumYoY: rate(epsCum, priorEpsCum) }).slice().reverse();
   });
 }
 
@@ -2178,7 +2180,7 @@ function sortRows(rows, key, direction) {
 
 function renderGrowthTable(rows) {
   const columns = growthColumns();
-  const sorted = sortRows(rows, state.growthSortBy, state.growthSortDir);
+  const sorted = sortRows(rows.slice().reverse(), state.growthSortBy, state.growthSortDir);
   const selectedGrowthKey = growthConfig[state.growth][state.growthMode];
   const colUnits = Object.fromEntries(columns.map(column => [column.key, unitForColumn(column, rows)]));
   document.getElementById('growthHead').innerHTML = `<tr>${columns.map(column => {
@@ -2255,7 +2257,7 @@ function renderMaChart() {
       labels: series.map(item => item.label),
       datasets: [
         { type: 'bar', label: `${unitName}營收`, data: scaledValues, backgroundColor: 'rgba(212,165,116,0.16)', borderColor: 'transparent', borderRadius: 2, barPercentage: 0.65, categoryPercentage: 0.85 },
-        { type: 'line', label: `3 ${unitName}均線`, data: scaledAverages[3], hidden: !state.maVisible[3], borderColor: '#d4a574', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, spanGaps: false, pointRadius: radius, pointBackgroundColor: colors, pointBorderColor: colors, pointHoverRadius: 6 },
+        { type: 'line', label: `3 ${unitName}均線`, data: scaledAverages[3], hidden: !state.maVisible[3], borderColor: '#5eead4', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, spanGaps: false, pointRadius: radius, pointBackgroundColor: colors, pointBorderColor: colors, pointHoverRadius: 6 },
         { type: 'line', label: `6 ${unitName}均線`, data: scaledAverages[6], hidden: !state.maVisible[6] || state.period === 'Y', borderColor: '#fbbf24', backgroundColor: 'transparent', borderWidth: 1.8, tension: 0.3, spanGaps: false, pointRadius: 0 },
         { type: 'line', label: `12 ${unitName}均線`, data: scaledAverages[12], hidden: !state.maVisible[12] || state.period === 'Y', borderColor: '#8a94a8', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4, 3], tension: 0.3, spanGaps: false, pointRadius: 0 },
       ]
@@ -2331,7 +2333,7 @@ const v2ViewSchemas = {
 
 function renderTable() {
   const columns = v2ViewSchemas[state.view];
-  const rows = sortRows(stock.quarterly.map((q, index) => quarterRow(index)), state.sortBy, state.sortDir);
+  const rows = sortRows(stock.quarterly.map((q, index) => quarterRow(index)).slice().reverse(), state.sortBy, state.sortDir);
   const colUnits = Object.fromEntries(columns.map(column => [column.key, unitForColumn(column, rows)]));
   document.getElementById('dataHead').innerHTML = `<tr>${columns.map(column => {
     const sort = state.sortBy === column.key ? state.sortDir === 'asc' ? 'ascending' : 'descending' : 'none';
@@ -2394,9 +2396,31 @@ function bindTooltipDelegation() {
    Controls
    ========================================================= */
 function bindControls() {
-  document.getElementById('qPicker').addEventListener('click', () => {
-    state.qIdx = (state.qIdx + 1) % stock.quarterly.length;
-    renderAll();
+  document.getElementById('qPicker').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const dropdown = document.getElementById('qDropdown');
+    if (!dropdown) return;
+    if (!dropdown.hidden) { dropdown.hidden = true; return; }
+    // render options (新到舊)
+    dropdown.innerHTML = stock.quarterly.slice().reverse().map((q, idx) => {
+      const realIdx = stock.quarterly.length - 1 - idx;
+      return `<button class="q-option" data-idx="${realIdx}" style="display:block;width:100%;padding:8px 14px;background:${realIdx === state.qIdx ? 'color-mix(in srgb, var(--brass) 18%, transparent)' : 'transparent'};border:none;color:var(--text);text-align:left;cursor:pointer;font-family:inherit;font-size:13px;">${q.q}</button>`;
+    }).join('');
+    dropdown.hidden = false;
+    dropdown.querySelectorAll('.q-option').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.qIdx = Number(btn.dataset.idx);
+        dropdown.hidden = true;
+        renderAll();
+      });
+    });
+  });
+  // 點空白處關閉下拉
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.q-picker-wrap')) {
+      const dd = document.getElementById('qDropdown');
+      if (dd) dd.hidden = true;
+    }
   });
 
   document.getElementById('viewTabs').addEventListener('click', event => {
