@@ -1997,7 +1997,7 @@ function renderGauges() {
 }
 
 function renderInsights() {
-  const container = document.getElementById('insightsPanel');
+  const container = document.getElementById('insights');
   if (!container) return;
   // v3: 優先使用 pipeline 產出的 insights (SPEC-insights-v3.1)
   if (Array.isArray(stock.insights) && stock.insights.length > 0) {
