@@ -231,8 +231,29 @@ input { font-family: inherit; }
 }
 
 @media (max-width: 640px) {
-  .search-box { display: none; }
-  .nav-tabs { margin-left: 0; }
+  .topbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "brand   status"
+      "tabs    search";
+    column-gap: 12px;
+    row-gap: 8px;
+    height: auto;
+    min-height: 60px;
+    padding: 8px 12px;
+    align-items: center;
+  }
+  .brand         { grid-area: brand; min-width: 0; }
+  .brand-text    { font-size: 13px; }
+  .brand-text .sub { display: none; }
+  .status-btn    { grid-area: status; padding: 0 8px; height: 30px; font-size: 11px; gap: 5px; }
+  .topbar-spacer { display: none; }
+  .nav-tabs      { grid-area: tabs; margin-left: 0; gap: 2px; }
+  .nav-tab       { white-space: nowrap; padding: 6px 10px; font-size: 12px; }
+  .search-box    { display: block; grid-area: search; width: auto; min-width: 0; }
+  .search-box input  { height: 32px; font-size: 12px; padding: 0 12px 0 30px; }
+  .search-box::before { left: 10px; }
 }
 
 /* =========================================================
@@ -1777,12 +1798,13 @@ function computeTableRows() {
       q: q.q,
       cl: q.cl, rev: q.rev, gp: q.gp, op: q.op, noi: q.noi, np: q.np, eps: q.eps,
       gm, om, nm,
-      revYoY: yoy(q.rev, py?.rev),
-      gpYoY:  yoy(q.gp,  py?.gp),
-      opYoY:  yoy(q.op,  py?.op),
-      npYoY:  yoy(q.np,  py?.np),
-      clYoY:  yoy(q.cl,  py?.cl),
-      clQoQ:  qoq(q.cl,  pq?.cl),
+      // v3.2: 優先讀 pipeline 產出的 YoY/QoQ,舊資料 fallback 前端自算
+      revYoY: q.revYoY ?? yoy(q.rev, py?.rev),
+      gpYoY:  q.gpYoY  ?? yoy(q.gp,  py?.gp),
+      opYoY:  q.opYoY  ?? yoy(q.op,  py?.op),
+      npYoY:  q.npYoY  ?? yoy(q.np,  py?.np),
+      clYoY:  q.clYoY  ?? yoy(q.cl,  py?.cl),
+      clQoQ:  q.clQoQ  ?? qoq(q.cl,  pq?.cl),
       clRevPct: (q.cl / q.rev) * 100,
       vis,
     };
@@ -1893,12 +1915,13 @@ function quarterRow(index) {
   const ind = indicators(q);
   return {
     idx: index, ...q, ...ind,
-    revYoY: rate(q.rev, py?.rev), revQoQ: rate(q.rev, prev?.rev),
-    gpYoY: rate(q.gp, py?.gp), gpQoQ: rate(q.gp, prev?.gp),
-    opYoY: rate(q.op, py?.op), opQoQ: rate(q.op, prev?.op),
-    npYoY: rate(q.np, py?.np), npQoQ: rate(q.np, prev?.np),
-    epsYoY: rate(q.eps, py?.eps), epsQoQ: rate(q.eps, prev?.eps),
-    clYoY: rate(q.cl, py?.cl), clQoQ: rate(q.cl, prev?.cl),
+    // v3.2: 優先讀 pipeline 產出的 YoY/QoQ,舊資料 fallback 前端自算
+    revYoY: q.revYoY ?? rate(q.rev, py?.rev), revQoQ: q.revQoQ ?? rate(q.rev, prev?.rev),
+    gpYoY:  q.gpYoY  ?? rate(q.gp,  py?.gp),  gpQoQ:  q.gpQoQ  ?? rate(q.gp,  prev?.gp),
+    opYoY:  q.opYoY  ?? rate(q.op,  py?.op),  opQoQ:  q.opQoQ  ?? rate(q.op,  prev?.op),
+    npYoY:  q.npYoY  ?? rate(q.np,  py?.np),  npQoQ:  q.npQoQ  ?? rate(q.np,  prev?.np),
+    epsYoY: q.epsYoY ?? rate(q.eps, py?.eps), epsQoQ: q.epsQoQ ?? rate(q.eps, prev?.eps),
+    clYoY:  q.clYoY  ?? rate(q.cl,  py?.cl),  clQoQ:  q.clQoQ  ?? rate(q.cl,  prev?.cl),
     clRevPct: q.cl / q.rev * 100,
     vis: visibilityForQuarter(index),
   };
@@ -2030,12 +2053,19 @@ function cumulativeValue(rows, index, key) {
 function growthRows() {
   const rows = stock.quarterly.map((q, index) => quarterRow(index));
   return rows.map((row, index) => {
-    const revCum = cumulativeValue(rows, index, 'rev');
-    const epsCum = cumulativeValue(rows, index, 'eps');
+    const q = stock.quarterly[index];
+    // v3.2: 優先讀 pipeline 產出的累計值與累計 YoY,舊資料 fallback 前端自算
+    const revCum = q.revCum ?? cumulativeValue(rows, index, 'rev');
+    const epsCum = q.epsCum ?? cumulativeValue(rows, index, 'eps');
     const priorIndex = index - 4;
     const priorRevCum = priorIndex >= 0 ? cumulativeValue(rows, priorIndex, 'rev') : null;
     const priorEpsCum = priorIndex >= 0 ? cumulativeValue(rows, priorIndex, 'eps') : null;
-    return { ...row, revCum, revCumYoY: rate(revCum, priorRevCum), epsCum, epsCumYoY: rate(epsCum, priorEpsCum) };
+    return {
+      ...row,
+      revCum, epsCum,
+      revCumYoY: q.revCumYoY ?? rate(revCum, priorRevCum),
+      epsCumYoY: q.epsCumYoY ?? rate(epsCum, priorEpsCum),
+    };
   });
 }
 
@@ -2110,7 +2140,7 @@ function renderGrowth() {
         }
       },
       scales: {
-        x: { grid: { display: false }, border: { color: '#262c3d' }, ticks: { color: '#5a6478', font: { family: 'JetBrains Mono', size: 10 } } },
+        x: { grid: { display: false }, border: { color: '#262c3d' }, ticks: { color: '#5a6478', font: { family: 'JetBrains Mono', size: 10 }, autoSkip: true, maxRotation: 45, minRotation: 0 } },
         y: { position: 'left', grid: { color: 'rgba(38,44,61,0.5)' }, border: { display: false }, ticks: { color: '#d4a574', font: { family: 'JetBrains Mono', size: 10 }, callback: value => state.growth === 'eps' ? Number(value).toFixed(1) : formatAxisMoney(value, barUnit) } },
         y1: { position: 'right', grid: { drawOnChartArea: false }, border: { display: false }, ticks: { color: '#5eead4', font: { family: 'JetBrains Mono', size: 10 }, callback: value => state.growth === 'cl' ? formatAxisMoney(value, lineUnit) : `${Number(value).toFixed(0)}%` } },
       }

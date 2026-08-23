@@ -157,6 +157,22 @@ a { color: inherit; text-decoration: none; }
 }
 .range-stack input[type="range"]:hover::-webkit-slider-thumb { background: var(--slider-thumb-hover); }
 .range-value { color: var(--text-dim); font: 500 11px var(--font-num); margin-top: 2px; }
+.range-inputs { display: flex; align-items: center; gap: 6px; margin: 5px 0 6px; }
+.range-inputs input[type="number"] {
+  flex: 1 1 0; min-width: 0; width: 100%; height: 28px;
+  background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px;
+  color: var(--text); font: 500 12px var(--font-num); padding: 0 6px; text-align: center;
+  outline: none; -moz-appearance: textfield;
+  transition: border-color 0.15s, box-shadow 0.15s, color 0.15s;
+}
+.range-inputs input[type="number"]::-webkit-outer-spin-button,
+.range-inputs input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.range-inputs input[type="number"]:focus {
+  border-color: var(--brass-line); box-shadow: 0 0 0 2px var(--brass-dim); color: var(--brass-hi);
+}
+.range-inputs input[type="number"].out-of-range { border-color: var(--coral-line); color: var(--coral); }
+.range-inputs .range-sep { color: var(--text-muted); font: 500 12px var(--font-num); flex: 0 0 auto; }
+.range-inputs .range-unit { color: var(--text-muted); font: 400 11px var(--font-num); flex: 0 0 auto; margin-left: 2px; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .toggle-label { color: var(--text-dim); font-size: 12px; line-height: 1.45; }
 .switch { position: relative; width: 42px; height: 23px; flex: 0 0 auto; }
@@ -256,6 +272,31 @@ a { color: inherit; text-decoration: none; }
   .hit-stat { flex: 1; }
   .meta-strip { flex-direction: column; gap: 4px; }
 }
+@media (max-width: 640px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "brand   status"
+      "tabs    search";
+    column-gap: 12px;
+    row-gap: 8px;
+    height: auto;
+    min-height: 60px;
+    padding: 8px 12px;
+    align-items: center;
+  }
+  .brand         { grid-area: brand; min-width: 0; }
+  .brand-text    { font-size: 13px; }
+  .brand-text .sub { display: none; }
+  .status-btn    { display: inline-flex; grid-area: status; padding: 0 8px; height: 30px; font-size: 11px; gap: 5px; }
+  .topbar-spacer { display: none; }
+  .nav-tabs      { grid-area: tabs; margin-left: 0; gap: 2px; }
+  .nav-tab       { white-space: nowrap; padding: 6px 10px; font-size: 12px; }
+  .search-box    { display: block; grid-area: search; width: auto; min-width: 0; }
+  .search-box input  { height: 32px; font-size: 12px; padding: 0 12px 0 30px; }
+  .search-box::before { left: 10px; }
+}
 @media (max-width: 639px) {
   .wrap { padding: 12px; }
   .filter-panel { width: 100%; }
@@ -346,30 +387,42 @@ body[data-status="ok"] .status-panel { display: none; }
       <section class="filter-section">
         <h4>財務健康度</h4>
         <div class="range-control" data-range="gm" data-tooltip="毛利 ÷ 營收。反映產品定價力與成本控制。≥25% 綠 / 15–25% 黃 / <15% 紅。">
-          <span class="range-label">毛利率</span><div class="range-stack"><input type="range" data-bound="min" aria-label="毛利率最低值"><input type="range" data-bound="max" aria-label="毛利率最高值"></div><div class="range-value"></div>
+          <span class="range-label">毛利率</span>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="毛利率最低值" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="毛利率最高值" inputmode="decimal"><span class="range-unit">%</span></div>
+          <div class="range-stack"><input type="range" data-bound="min" aria-label="毛利率最低值"><input type="range" data-bound="max" aria-label="毛利率最高值"></div>
         </div>
         <div class="range-control" data-range="om" data-tooltip="營業利益 ÷ 營收。反映本業獲利能力。≥8% 綠 / 3–8% 黃 / <3% 紅。">
-          <span class="range-label">營益率</span><div class="range-stack"><input type="range" data-bound="min" aria-label="營益率最低值"><input type="range" data-bound="max" aria-label="營益率最高值"></div><div class="range-value"></div>
+          <span class="range-label">營益率</span>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="營益率最低值" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="營益率最高值" inputmode="decimal"><span class="range-unit">%</span></div>
+          <div class="range-stack"><input type="range" data-bound="min" aria-label="營益率最低值"><input type="range" data-bound="max" aria-label="營益率最高值"></div>
         </div>
         <div class="range-control" data-range="nm" data-tooltip="淨利 ÷ 營收。≥5% 綠 / 0–5% 黃 / <0% 紅。">
-          <span class="range-label">淨利率</span><div class="range-stack"><input type="range" data-bound="min" aria-label="淨利率最低值"><input type="range" data-bound="max" aria-label="淨利率最高值"></div><div class="range-value"></div>
+          <span class="range-label">淨利率</span>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="淨利率最低值" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="淨利率最高值" inputmode="decimal"><span class="range-unit">%</span></div>
+          <div class="range-stack"><input type="range" data-bound="min" aria-label="淨利率最低值"><input type="range" data-bound="max" aria-label="淨利率最高值"></div>
         </div>
       </section>
 
       <section class="filter-section">
         <h4>成長動能</h4>
         <div class="range-control" data-range="revYoY" data-tooltip="相較去年同期營收的變化百分比。>15% 為強勁成長。">
-          <span class="range-label">營收 YoY</span><div class="range-stack"><input type="range" data-bound="min" aria-label="營收年增率最低值"><input type="range" data-bound="max" aria-label="營收年增率最高值"></div><div class="range-value"></div>
+          <span class="range-label">營收 YoY</span>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="營收年增率最低值" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="營收年增率最高值" inputmode="decimal"><span class="range-unit">%</span></div>
+          <div class="range-stack"><input type="range" data-bound="min" aria-label="營收年增率最低值"><input type="range" data-bound="max" aria-label="營收年增率最高值"></div>
         </div>
       </section>
 
       <section class="filter-section">
         <h4>訂單能見度</h4>
         <div class="range-control" data-range="clYoY" data-tooltip="合約負債期末相較去年同期的變化。>30% 為訂單池強勁累積,<0% 為訂單轉弱。啟用此條件會自動排除無合約負債的股票。">
-          <span class="range-label">合約負債 YoY</span><div class="range-stack"><input type="range" data-bound="min" aria-label="合約負債年增率最低值"><input type="range" data-bound="max" aria-label="合約負債年增率最高值"></div><div class="range-value"></div>
+          <span class="range-label">合約負債 YoY</span>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="合約負債年增率最低值" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="合約負債年增率最高值" inputmode="decimal"><span class="range-unit">%</span></div>
+          <div class="range-stack"><input type="range" data-bound="min" aria-label="合約負債年增率最低值"><input type="range" data-bound="max" aria-label="合約負債年增率最高值"></div>
         </div>
         <div class="range-control" data-range="vis" data-tooltip="合約負債 ÷ 該季 3 個月平均月營收。啟用此條件會自動排除無合約負債的股票。">
-          <span class="range-label">能見度月數</span><div class="range-stack"><input type="range" data-bound="min" aria-label="能見度最低月數"><input type="range" data-bound="max" aria-label="能見度最高月數"></div><div class="range-value"></div>
+          <span class="range-label">能見度月數</span>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="能見度最低月數" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="能見度最高月數" inputmode="decimal"><span class="range-unit">個月</span></div>
+          <div class="range-stack"><input type="range" data-bound="min" aria-label="能見度最低月數"><input type="range" data-bound="max" aria-label="能見度最高月數"></div>
         </div>
       </section>
 
@@ -632,17 +685,23 @@ function renderControls() {
     const key = control.dataset.range;
     const def = rangeDefs[key];
     const [low, high] = state.ranges[key];
-    const minInput = control.querySelector('[data-bound="min"]');
-    const maxInput = control.querySelector('[data-bound="max"]');
-    [minInput, maxInput].forEach(input => { input.min = def.min; input.max = def.max; input.step = def.step; });
-    minInput.value = low; maxInput.value = high;
+    const minR = control.querySelector('input[type="range"][data-bound="min"]');
+    const maxR = control.querySelector('input[type="range"][data-bound="max"]');
+    const minN = control.querySelector('input[type="number"][data-bound="min-num"]');
+    const maxN = control.querySelector('input[type="number"][data-bound="max-num"]');
+    [minR, maxR, minN, maxN].forEach(input => { input.min = def.min; input.max = def.max; input.step = def.step; });
+    minR.value = low; maxR.value = high;
+    // 只在該 number input 未 focus 時同步值,避免打字被打斷
+    if (document.activeElement !== minN) minN.value = low;
+    if (document.activeElement !== maxN) maxN.value = high;
     const lowPct = ((low - def.min) / (def.max - def.min)) * 100;
     const highPct = ((high - def.min) / (def.max - def.min)) * 100;
     control.style.setProperty('--low', `${lowPct}%`);
     control.style.setProperty('--high', `${highPct}%`);
-    const decimals = def.step < 1 ? 1 : 0;
-    const suffix = def.unit;
-    control.querySelector('.range-value').textContent = `${def.label}：${low.toFixed(decimals)}${suffix} – ${high.toFixed(decimals)}${suffix}`;
+    // 動態 z-index:當 min 越過中點時,把 min thumb 拉到上層,否則使用者無法拖動它
+    const midPoint = (def.min + def.max) / 2;
+    if (low > midPoint) { minR.style.zIndex = '3'; maxR.style.zIndex = '2'; }
+    else { minR.style.zIndex = ''; maxR.style.zIndex = ''; }
   });
   document.querySelectorAll('.template-chip').forEach(chip => chip.classList.toggle('active', chip.dataset.template === state.template));
   const count = activeConditionCount();
@@ -714,11 +773,16 @@ function renderAll() { renderControls(); renderResults(); }
 const applyRangeChange = debounce(() => { state.page = 1; renderAll(); syncUrl('replace'); }, 200);
 function bindControls() {
   document.querySelectorAll('.range-control').forEach(control => {
+    const key = control.dataset.range;
+    const def = rangeDefs[key];
+    const minR = () => control.querySelector('input[type="range"][data-bound="min"]');
+    const maxR = () => control.querySelector('input[type="range"][data-bound="max"]');
+    const minN = () => control.querySelector('input[type="number"][data-bound="min-num"]');
+    const maxN = () => control.querySelector('input[type="number"][data-bound="max-num"]');
+
+    // Range slider 拖動
     control.querySelectorAll('input[type="range"]').forEach(input => input.addEventListener('input', () => {
-      const key = control.dataset.range;
-      const lowInput = control.querySelector('[data-bound="min"]');
-      const highInput = control.querySelector('[data-bound="max"]');
-      let low = Number(lowInput.value), high = Number(highInput.value);
+      let low = Number(minR().value), high = Number(maxR().value);
       if (input.dataset.bound === 'min' && low > high) low = high;
       if (input.dataset.bound === 'max' && high < low) high = low;
       state.ranges[key] = [low, high];
@@ -726,6 +790,44 @@ function bindControls() {
       renderControls();
       applyRangeChange();
     }));
+
+    // Number input 打字即時同步:超出範圍或格式錯誤時標紅但不改 state
+    control.querySelectorAll('input[type="number"]').forEach(input => {
+      input.addEventListener('input', () => {
+        const raw = input.value.trim();
+        if (raw === '' || raw === '-') { input.classList.add('out-of-range'); return; }
+        const val = Number(raw);
+        if (!Number.isFinite(val) || val < def.min || val > def.max) {
+          input.classList.add('out-of-range');
+          return;
+        }
+        input.classList.remove('out-of-range');
+        let low = Number(minN().value), high = Number(maxN().value);
+        if (!Number.isFinite(low)) low = def.min;
+        if (!Number.isFinite(high)) high = def.max;
+        if (input.dataset.bound === 'min-num' && low > high) low = high;
+        if (input.dataset.bound === 'max-num' && high < low) high = low;
+        state.ranges[key] = [low, high];
+        state.template = null;
+        renderControls();
+        applyRangeChange();
+      });
+      // blur / Enter:強制 clamp 到合法範圍,清除警示
+      input.addEventListener('change', () => {
+        let low = Number(minN().value), high = Number(maxN().value);
+        if (!Number.isFinite(low)) low = def.min;
+        if (!Number.isFinite(high)) high = def.max;
+        low = clamp(low, def.min, def.max);
+        high = clamp(high, def.min, def.max);
+        if (low > high) low = high;
+        state.ranges[key] = [low, high];
+        state.template = null;
+        minN().classList.remove('out-of-range');
+        maxN().classList.remove('out-of-range');
+        renderControls();
+        applyRangeChange();
+      });
+    });
   });
   document.getElementById('industrySelect').addEventListener('change', event => { state.industry = event.target.value; state.template = null; state.page = 1; renderAll(); syncUrl('replace'); });
   document.getElementById('marketSelect').addEventListener('change', event => { state.market = event.target.value; state.template = null; state.page = 1; renderAll(); syncUrl('replace'); });
