@@ -295,7 +295,7 @@ body[data-status="ok"] .status-panel { display: none; }
   </a>
   <nav class="nav-tabs" aria-label="主要導覽">
     <a class="nav-tab active" href="scanner.html" aria-current="page">選股掃描</a>
-    <a class="nav-tab" href="stock.html?id=6789">個股詳細</a>
+    <a class="nav-tab" href="stock.html">個股詳細</a>
   </nav>
   <div class="topbar-spacer"></div>
   <div class="search-box"><input type="text" aria-label="搜尋股號或名稱" placeholder="搜尋股號 / 名稱"></div>
@@ -787,6 +787,14 @@ async function boot() {
     await loadScanner();
     await loadMeta();
     applyMetaToTopbar();
+    // === v3 (方案 C): 恢復上次看的股票 ===
+    try {
+      const lastId = localStorage.getItem('lastViewedStock');
+      if (lastId && /^\d{4,6}$/.test(lastId)) {
+        const detailTab = document.querySelector('a.nav-tab[href^="stock.html"]');
+        if (detailTab) detailTab.href = `stock.html?id=${lastId}`;
+      }
+    } catch (e) {}
     bindControls();
     renderAll();
     // 綁定 Enter 搜尋 + 中文搜尋 (若 v2 已部署)
