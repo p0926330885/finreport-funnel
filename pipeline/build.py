@@ -1,10 +1,21 @@
 """
-Main orchestrator.
+Main orchestrator (v3.4 Phase 2)
 
 Modes:
-  python -m pipeline.build --daily              # incremental daily update
-  python -m pipeline.build --backfill           # full refresh (all stocks, all history)
+  python -m pipeline.build --daily              # incremental daily update (all stocks)
+  python -m pipeline.build --backfill           # full refresh (single batch or all)
+  python -m pipeline.build --backfill --batch 0 # backfill 1 batch only (Phase 2)
   python -m pipeline.build --stock 6789         # rebuild single stock (dev)
+
+Phase 2 flow:
+  1. Fetch universe from FinMind TaiwanStockInfo (once, cached 30 days)
+  2. Filter to common stocks (universe.build_universe → ~1,700 檔)
+  3. If --batch N specified: process only batch N (universe.get_batch)
+  4. If --daily: process all (or DEMO_UNIVERSE if USE_FULL_UNIVERSE=False)
+  5. Ingest raw data + transform + write per-stock detail + collect scanner rows
+  6. Update scanner_index.json (merged across all batches)
+  7. Update meta.json with progress info
+  8. Log health distribution (Phase 2 feature)
 """
 from __future__ import annotations
 
@@ -14,7 +25,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import config, ingest, output, transform
+from . import config, ingest, output, transform, universe
 from .finmind_client import load_client
 
 logging.basicConfig(
@@ -38,29 +49,86 @@ def _current_quarter_label(scanner_rows: list[dict]) -> str:
     return q[-1]["q"] if q else "—"
 
 
-def run(mode: str, stock_ids: list[str] | None = None, force: bool = False) -> int:
+def _resolve_targets(mode: str, universe_df, stock_ids: list[str] | None, batch: int | None) -> tuple[list[str], str]:
+    """
+    Decide which stocks to process based on mode + args.
+
+    Returns:
+        (targets, description) — description used in log & meta
+    """
+    # Explicit single stock override (dev mode)
+    if stock_ids:
+        return stock_ids, f"explicit {len(stock_ids)} stocks"
+
+    # Full universe mode (Phase 2)
+    if config.USE_FULL_UNIVERSE:
+        full = universe.build_universe(universe_df)
+        if not full:
+            log.error("Full universe filter returned 0 stocks, aborting")
+            return [], "empty universe"
+
+        if batch is not None:
+            # Batch mode: process only batch N
+            batch_stocks = universe.get_batch(full, batch)
+            desc = f"batch {batch}/{config.BATCH_COUNT} ({len(batch_stocks)}/{len(full)} stocks)"
+            log.info("Universe: %d total → %s", len(full), desc)
+            return batch_stocks, desc
+        else:
+            desc = f"full universe ({len(full)} stocks)"
+            log.info(desc)
+            return full, desc
+
+    # DEMO fallback (backward compat, USE_FULL_UNIVERSE=False)
+    return config.DEMO_UNIVERSE, f"DEMO_UNIVERSE ({len(config.DEMO_UNIVERSE)} stocks)"
+
+
+def _merge_scanner_index(new_rows: list[dict]) -> list[dict]:
+    """
+    Batch 模式時: 讀取現有 scanner_index.json, upsert 本批處理的 rows。
+    非 batch 模式: 直接用新 rows 覆蓋。
+
+    這樣 7 批跑完後, scanner_index.json 累積為完整全市場資料。
+    """
+    if not config.SCANNER_INDEX_PATH.exists():
+        return new_rows
+
+    try:
+        existing = json.loads(config.SCANNER_INDEX_PATH.read_text(encoding="utf-8"))
+        existing_rows = existing.get("stocks", [])
+    except Exception as exc:
+        log.warning("Failed to read existing scanner_index: %s → will overwrite", exc)
+        return new_rows
+
+    # Upsert: 舊 row 用新的取代 (若 id 相同), 新 id 直接加入
+    by_id = {r["id"]: r for r in existing_rows}
+    for row in new_rows:
+        by_id[row["id"]] = row
+    merged = list(by_id.values())
+    log.info("Scanner index merged: existing=%d + new=%d → total=%d", len(existing_rows), len(new_rows), len(merged))
+    return merged
+
+
+def run(mode: str, stock_ids: list[str] | None = None, force: bool = False, batch: int | None = None) -> int:
     client = load_client()
     log.info("Client loaded (mock=%s)", client.mock)
 
-    # Universe
+    # 1. Fetch universe metadata (from cache if fresh)
     universe_df = ingest.fetch_universe(client, force=force)
     if universe_df.empty:
         log.error("Empty universe, aborting")
         return 1
-    log.info("Universe: %d stocks", len(universe_df))
+    log.info("Universe fetched: %d rows", len(universe_df))
 
-    # Which stocks to process
-    if stock_ids:
-        targets = stock_ids
-    elif mode == "backfill":
-        targets = config.DEMO_UNIVERSE  # 全量,首版限縮於示範清單
-    else:  # daily
-        targets = config.DEMO_UNIVERSE
+    # 2. Resolve targets (full / batch / DEMO / explicit)
+    targets, target_desc = _resolve_targets(mode, universe_df, stock_ids, batch)
+    if not targets:
+        log.error("No targets to process, aborting")
+        return 1
 
-    # Ingest raw
+    # 3. Ingest raw data
     ingest.ingest_all(client, targets, force=force)
 
-    # Transform + write per-stock detail + collect scanner rows
+    # 4. Transform + write per-stock detail + collect scanner rows
     scanner_rows: list[dict] = []
     ok, fail = 0, 0
     for sid in targets:
@@ -81,39 +149,61 @@ def run(mode: str, stock_ids: list[str] | None = None, force: bool = False) -> i
 
     log.info("Built %d stock detail files (fail=%d)", ok, fail)
 
-    # Scanner index
-    current_q = _current_quarter_label(scanner_rows)
-    scanner_path = output.write_scanner_index(scanner_rows, current_q)
-    log.info("Wrote scanner index: %s (%d stocks)", scanner_path.name, len(scanner_rows))
+    # 5. Scanner index (merge with existing if batch mode)
+    if batch is not None:
+        merged_rows = _merge_scanner_index(scanner_rows)
+    else:
+        merged_rows = scanner_rows
 
-    # Meta
-    output.write_meta({
+    current_q = _current_quarter_label(merged_rows)
+    scanner_path = output.write_scanner_index(merged_rows, current_q)
+    log.info("Wrote scanner index: %s (%d stocks)", scanner_path.name, len(merged_rows))
+
+    # 6. Health distribution log (Phase 2 feature)
+    universe.log_health_distribution(merged_rows)
+
+    # 7. Meta
+    meta_payload = {
         "universe_size":  int(len(universe_df)),
         "targets":        len(targets),
+        "target_desc":    target_desc,
         "built_ok":       ok,
         "built_fail":     fail,
+        "scanner_size":   len(merged_rows),
         "backfill_status": "complete" if mode == "backfill" else "incremental",
         "data_freshness": {
             "quarterly": current_q,
-            "monthly":   scanner_rows[0].get("_latest_month") if scanner_rows else None,
+            "monthly":   merged_rows[0].get("_latest_month") if merged_rows else None,
         },
-    })
+    }
+    if batch is not None:
+        meta_payload["last_batch"] = batch
+        meta_payload["batch_count"] = config.BATCH_COUNT
+    output.write_meta(meta_payload)
+
     return 0 if fail == 0 else 2
 
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--daily", action="store_true", help="Incremental daily update")
-    p.add_argument("--backfill", action="store_true", help="Force refresh all history")
+    p.add_argument("--daily", action="store_true", help="Incremental daily update (all stocks)")
+    p.add_argument("--backfill", action="store_true", help="Force refresh (all history)")
+    p.add_argument("--batch", type=int, default=None, help=f"Process only batch N (0..{config.BATCH_COUNT - 1}) · Phase 2 scheduled backfill")
     p.add_argument("--stock", action="append", help="Rebuild single stock (repeatable)")
     args = p.parse_args()
 
+    # Validate batch
+    if args.batch is not None:
+        if args.batch < 0 or args.batch >= config.BATCH_COUNT:
+            print(f"error: --batch must be 0..{config.BATCH_COUNT - 1}, got {args.batch}", file=sys.stderr)
+            return 1
+
     if args.backfill:
-        return run("backfill", stock_ids=args.stock, force=True)
+        return run("backfill", stock_ids=args.stock, force=True, batch=args.batch)
     if args.daily:
-        return run("daily", stock_ids=args.stock, force=False)
+        return run("daily", stock_ids=args.stock, force=False, batch=args.batch)
     if args.stock:
-        return run("daily", stock_ids=args.stock, force=False)
+        return run("daily", stock_ids=args.stock, force=False, batch=None)
     p.print_help()
     return 1
 
