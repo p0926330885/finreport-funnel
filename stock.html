@@ -1809,6 +1809,9 @@ function computeTableRows() {
       clYoY:  q.clYoY  ?? yoy(q.cl,  py?.cl),
       clQoQ:  q.clQoQ  ?? qoq(q.cl,  pq?.cl),
       clRevPct: (q.cl / q.rev) * 100,
+      // v3.4: 佔股本比 (pipeline 產出,前端只讀)
+      capitalStock: q.capitalStock ?? null,
+      clRatio: q.clRatio ?? null,
       vis,
     };
   });
@@ -1834,6 +1837,7 @@ const tooltips = {
   qoq: '相較上一季的變化百分比。反映短期動能。',
   visibility: '合約負債 ÷ 該季 3 個月平均月營收 = 未來能見的月數。>3 個月為長訂單能見度、1–3 個月為一般、<1 個月為短期能見度。',
   clRev: '合約負債 ÷ 當季營收 × 100%。>50% 通常代表訂單充足。',
+  clRatio: '合約負債 ÷ 普通股股本 × 100%。反映訂單池相對股本規模的倍數。100% 即等於股本、200% 即為股本 2 倍。',
   rev: '本季已認列的營收總額。轉換漏斗的起點。',
   gp: '營業收入 − 營業成本。反映產品定價力與成本控制。',
   cogs: '生產或採購的直接成本。',
@@ -1941,6 +1945,8 @@ function renderClStats() {
     { label: 'YoY 年增率', value: fmt.pctS(row.clYoY), cls: yoyClass, tip: tooltips.yoy, cardTip: '合約負債相較去年同期的變化。反映訂單池是否累積。>30% 為強勁累積、<0% 為訂單轉弱。' },
     { label: 'QoQ 季增率', value: fmt.pctS(row.clQoQ), cls: qoqClass, tip: tooltips.qoq, cardTip: '合約負債相較上一季的變化。反映短期訂單動能。' },
     { label: '訂單能見度', value: row.vis == null ? '—' : `${fmt.vis(row.vis)} 個月`, detail: `占季營收 ${fmt.pct(row.clRevPct)}`, tip: tooltips.visibility, cardTip: '合約負債期末餘額相當於未來幾個月的營收。>3 個月為長訂單能見度、1–3 個月為一般,<1 個月為短期能見度。' },
+    // v3.4: 佔股本比
+    { label: '佔股本比', value: row.clRatio == null ? '—' : fmt.pct(row.clRatio), tip: tooltips.clRatio, cardTip: '合約負債期末餘額相當於普通股股本的多少倍。數值愈高代表訂單池相對股本規模愈大。' },
   ];
   document.getElementById('clStats').innerHTML = items.map(item => `
     <div class="order-kpi ${item.cls || ''}" ${tipAttr(item.cardTip)}>
@@ -1957,7 +1963,9 @@ function renderClStats() {
     const down = last.slice(1).every((value, index) => value <= last[index]);
     trend = up ? '、近 3 季走高' : down ? '、近 3 季走跌' : '';
   }
-  document.getElementById('clNote').innerHTML = `訂單池 <b>${moneyWithUnit(row.cl, unitInfo)}</b>,YoY ${fmt.pctS(row.clYoY)}(${level})${trend}。相當於 <b>${fmt.vis(row.vis)}</b> 個月能見度,佔本季認列營收 <b>${fmt.pct(row.clRevPct)}</b>。`;
+  // v3.4: 佔股本比動態附加
+  const clRatioSuffix = row.clRatio != null ? `,相當於股本 <b>${(row.clRatio / 100).toFixed(1)}</b> 倍` : '';
+  document.getElementById('clNote').innerHTML = `訂單池 <b>${moneyWithUnit(row.cl, unitInfo)}</b>,YoY ${fmt.pctS(row.clYoY)}(${level})${trend}。相當於 <b>${fmt.vis(row.vis)}</b> 個月能見度,佔本季認列營收 <b>${fmt.pct(row.clRevPct)}</b>${clRatioSuffix}。`;
 }
 
 function renderFunnel() {
@@ -2093,6 +2101,7 @@ function renderGrowth() {
         { label: '期別', value: current.q, tip: tooltips.cl },
         { label: `合約負債流動(${barUnit.unit})`, value: formatMoney(current.cl, barUnit), tip: tooltips.cl },
         { label: `季營業收入淨額(${lineUnit.unit})`, value: formatMoney(current.rev, lineUnit), tip: tooltips.rev },
+        { label: '佔股本比', value: current.clRatio == null ? '—' : fmt.pct(current.clRatio), tip: tooltips.clRatio },
       ]
     : [
         { label: '期別', value: current.q, tip: config.tip },
@@ -2160,7 +2169,7 @@ function growthColumns() {
     op: [...common, { key: 'op', label: '營業利益', type: 'money' }, { key: 'opQoQ', label: '季增率', type: 'signedPct' }, { key: 'opYoY', label: '年增率', type: 'signedPct' }, { key: 'om', label: '營益率', type: 'pct' }],
     np: [...common, { key: 'np', label: '稅後淨利', type: 'money' }, { key: 'npQoQ', label: '季增率', type: 'signedPct' }, { key: 'npYoY', label: '年增率', type: 'signedPct' }, { key: 'nm', label: '淨利率', type: 'pct' }],
     eps: [...common, { key: 'eps', label: 'EPS', type: 'eps' }, { key: 'epsQoQ', label: '季增率', type: 'signedPct' }, { key: 'epsYoY', label: '年增率', type: 'signedPct' }],
-    cl: [...common, { key: 'cl', label: '合約負債', type: 'money' }, { key: 'clQoQ', label: '合約負債季增率', type: 'signedPct' }, { key: 'clYoY', label: '合約負債年增率', type: 'signedPct' }, { key: 'clRevPct', label: '合約負債占季營收比', type: 'pct' }, { key: 'rev', label: '季營收', type: 'money' }],
+    cl: [...common, { key: 'cl', label: '合約負債', type: 'money' }, { key: 'clQoQ', label: '合約負債季增率', type: 'signedPct' }, { key: 'clYoY', label: '合約負債年增率', type: 'signedPct' }, { key: 'clRevPct', label: '合約負債占季營收比', type: 'pct' }, { key: 'rev', label: '季營收', type: 'money' }, { key: 'clRatio', label: '佔股本比', type: 'pct' }],
   };
   const selected = columns[state.growth];
   const config = growthConfig[state.growth];
@@ -2353,11 +2362,12 @@ const v2ViewSchemas = {
   cl: [
     { key: 'q', label: '季度', type: 'text', tip: tooltips.cl },
     { key: 'cl', label: '合約負債', type: 'money', tip: tooltips.cl },
-    { key: 'clYoY', label: '合約負債年增率', type: 'signedPct', tip: tooltips.yoy },
-    { key: 'clQoQ', label: '合約負債季增率', type: 'signedPct', tip: tooltips.qoq },
+    { key: 'clQoQ', label: '季增率', type: 'signedPct', tip: tooltips.qoq },
+    { key: 'clYoY', label: '年增率', type: 'signedPct', tip: tooltips.yoy },
+    { key: 'clRevPct', label: '佔季營收比', type: 'pct', tip: tooltips.clRev },
     { key: 'rev', label: '季營收', type: 'money', tip: tooltips.rev },
-    { key: 'clRevPct', label: '合約負債占季營收比', type: 'pct', tip: tooltips.clRev },
     { key: 'vis', label: '能見度', type: 'months', tip: tooltips.visibility },
+    { key: 'clRatio', label: '佔股本比', type: 'pct', tip: tooltips.clRatio },
   ],
   growth: [
     { key: 'q', label: '季度', type: 'text', tip: tooltips.yoy },
