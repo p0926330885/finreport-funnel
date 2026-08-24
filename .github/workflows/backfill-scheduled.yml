@@ -1,0 +1,138 @@
+name: Backfill (Scheduled 7-Batch)
+
+# ============================================================
+# Phase 2: 全市場 1,700 檔擴充 · 7 批自動接力排程
+# 
+# 執行邏輯:
+#   - 每天台北時間 03:30 執行一批 (UTC 19:30 前一天)
+#   - Batch ID = day_of_year % 7 (0-6)
+#   - 一週跑完全部 · 週而復始
+#   - 每批處理約 250 檔,耗時約 1-1.5 小時
+#
+# 手動觸發:
+#   - workflow_dispatch 可指定 batch_id (0-6) 或留空自動計算
+# ============================================================
+
+on:
+  # 每天 UTC 19:30 = 台北 03:30
+  schedule:
+    - cron: "30 19 * * *"
+
+  # 手動觸發 · 可指定 batch_id
+  workflow_dispatch:
+    inputs:
+      batch_id:
+        description: "指定 Batch ID (0-6),留空 = 自動用日期計算"
+        required: false
+        default: ""
+      force_refresh:
+        description: "強制刷新快取 (true/false)"
+        required: false
+        default: "true"
+
+permissions:
+  contents: write
+
+# 避免同時執行多個 batch 導致 git conflict
+concurrency:
+  group: pipeline-scheduled-backfill
+  cancel-in-progress: false
+
+jobs:
+  scheduled-backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Compute batch ID
+        id: batch
+        run: |
+          if [ -n "${{ github.event.inputs.batch_id }}" ]; then
+            BATCH="${{ github.event.inputs.batch_id }}"
+            echo "Manual mode: batch=$BATCH"
+          else
+            # 台北時間今天的 day-of-year (1-366) % 7 → batch 0-6
+            BATCH=$(TZ=Asia/Taipei date +%j)
+            BATCH=$((10#$BATCH % 7))
+            echo "Auto mode: TPE date $(TZ=Asia/Taipei date +'%Y-%m-%d') → batch=$BATCH"
+          fi
+          echo "batch=$BATCH" >> $GITHUB_OUTPUT
+          echo "Selected BATCH_ID=$BATCH"
+
+      - name: Restore raw data cache
+        uses: actions/cache@v4
+        with:
+          path: cache/
+          key: pipeline-batch-${{ steps.batch.outputs.batch }}-${{ github.run_id }}
+          restore-keys: |
+            pipeline-batch-${{ steps.batch.outputs.batch }}-
+            pipeline-backfill-
+            pipeline-raw-
+
+      - name: Run backfill (Batch ${{ steps.batch.outputs.batch }} / 7)
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: |
+          FORCE_FLAG=""
+          if [ "${{ github.event.inputs.force_refresh }}" != "false" ]; then
+            FORCE_FLAG="--backfill"
+          else
+            FORCE_FLAG="--daily"
+          fi
+          echo "Executing: python -m pipeline.build $FORCE_FLAG --batch ${{ steps.batch.outputs.batch }}"
+          python -m pipeline.build $FORCE_FLAG --batch ${{ steps.batch.outputs.batch }}
+
+      - name: Save cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: cache/
+          key: pipeline-batch-${{ steps.batch.outputs.batch }}-${{ github.run_id }}
+
+      - name: Show meta.json summary
+        if: always()
+        run: |
+          if [ -f data/meta.json ]; then
+            echo "=== meta.json ==="
+            cat data/meta.json
+          fi
+
+      - name: Commit updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "No data changes for batch ${{ steps.batch.outputs.batch }}"
+          else
+            git commit -m "Backfill batch ${{ steps.batch.outputs.batch }}/7 · $(TZ=Asia/Taipei date +%Y-%m-%d)"
+            git push
+          fi
+
+      # === GitHub Actions Summary (方便 review) ===
+      - name: Post job summary
+        if: always()
+        run: |
+          echo "## 📦 Backfill Batch ${{ steps.batch.outputs.batch }} / 7" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **TPE 日期**: $(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Batch ID**: ${{ steps.batch.outputs.batch }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f data/meta.json ]; then
+            echo "- **產出**: 見下方 meta.json" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat data/meta.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi

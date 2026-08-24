@@ -1,7 +1,29 @@
 name: Daily build
 
+# ============================================================
+# 日常增量更新 (Phase 2 版本)
+#
+# 觸發時機:
+#   - 每天台北時間 22:00 (UTC 14:00) 執行增量更新
+#     這個時段避開了 scheduled-backfill 的 TPE 03:30 執行
+#   - 手動 workflow_dispatch
+#
+# 邏輯:
+#   - --daily 模式: incremental
+#   - 走 fetch_universe cache (30 天新鮮度)
+#   - 走每檔股票 cache (fs/bs = 45 天, revenue = 7 天)
+#   - 只實際打 FinMind API 抓真正需要更新的資料
+#   - 對已存在且未過期的 stock.json 不重跑
+#
+# 用途:
+#   - 抓每月 10 號後公布的新月營收
+#   - 抓季報公布日後的新財報
+#   - 保持首頁 "資料 YYYY-MM-DD" 每天最新
+# ============================================================
+
 on:
   schedule:
+    # UTC 14:00 = 台北 22:00
     - cron: "0 14 * * *"
   workflow_dispatch:
 
@@ -16,6 +38,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,22 +55,25 @@ jobs:
       - name: Restore raw data cache
         uses: actions/cache@v4
         with:
-          path: cache/raw
-          key: pipeline-raw-${{ github.run_id }}
+          path: cache/
+          key: pipeline-daily-${{ github.run_id }}
           restore-keys: |
+            pipeline-daily-
+            pipeline-batch-
+            pipeline-backfill-
             pipeline-raw-
 
-      - name: Run daily incremental build
+      - name: Run daily incremental
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
         run: python -m pipeline.build --daily
 
-      - name: Save raw data cache
+      - name: Save cache
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: cache/raw
-          key: pipeline-raw-${{ github.run_id }}
+          path: cache/
+          key: pipeline-daily-${{ github.run_id }}
 
       - name: Commit updated data
         run: |
@@ -57,6 +83,18 @@ jobs:
           if git diff --cached --quiet; then
             echo "No data changes"
           else
-            git commit -m "Daily build $(date -u +%Y-%m-%d)"
+            git commit -m "Daily incremental $(TZ=Asia/Taipei date +%Y-%m-%d)"
             git push
+          fi
+
+      - name: Post job summary
+        if: always()
+        run: |
+          echo "## 🔄 Daily Incremental Update" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **TPE 時間**: $(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M')" >> $GITHUB_STEP_SUMMARY
+          if [ -f data/meta.json ]; then
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat data/meta.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
           fi
