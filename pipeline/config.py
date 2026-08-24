@@ -24,15 +24,14 @@ RETRY_BACKOFF_SECONDS = 5
 # Datasets used (SPEC §5)
 # ============================================================
 DATASETS = {
-    "info":     "TaiwanStockInfo",                   # 股票基本資料
-    "fs":       "TaiwanStockFinancialStatements",    # 綜合損益表 (季)
-    "bs":       "TaiwanStockBalanceSheet",           # 資產負債表 (季,合約負債在此)
-    "revenue":  "TaiwanStockMonthRevenue",           # 月營收
-    "price":    "TaiwanStockPrice",                  # 日 K (可選,未來擴充)
+    "info":    "TaiwanStockInfo",                  # 股票基本資料
+    "fs":      "TaiwanStockFinancialStatements",   # 綜合損益表 (季)
+    "bs":      "TaiwanStockBalanceSheet",          # 資產負債表 (季) - for 合約負債
+    "revenue": "TaiwanStockMonthRevenue",          # 月營收
 }
 
 # ============================================================
-# Business constants (matches SPEC v2.2 §7, Scanner §7.5)
+# Business thresholds
 # ============================================================
 HAS_CL_THRESHOLD = 0.15                  # v2.2 §4.2: max(近8Q CL) / max(近8Q rev) > 0.15
 QUARTERLY_HISTORY_QUARTERS = 20          # Detail 頁 20 季 (5 年)
@@ -42,12 +41,12 @@ GOLDEN_CROSS_LOOKBACK_DAYS = 30          # Scanner §7.6
 
 THRESHOLD_TO_YI = 50000                  # v2.2 §23 (百萬 -> 億 切換閾值)
 
-# Health thresholds (v2.2 §7.3)
+# Health score thresholds (SPEC §17)
 HEALTH_THRESHOLDS = {
-    "gm":       {"green": 25.0, "yellow": 15.0, "absolute": False},
-    "om":       {"green":  8.0, "yellow":  3.0, "absolute": False},
-    "nm":       {"green":  5.0, "yellow":  0.0, "absolute": False},
-    "noiRatio": {"green": 25.0, "yellow": 70.0, "absolute": True},  # <25% 綠, <70% 黃
+    "gm":  {"green": 25, "yellow": 15},   # gross margin
+    "om":  {"green": 8,  "yellow": 3},    # operating margin
+    "nm":  {"green": 5,  "yellow": 2},    # net margin
+    "noi": {"green": 25, "yellow": 70},   # |NOI/NP| (absolute)
 }
 
 # ============================================================
@@ -68,11 +67,18 @@ INDUSTRY_MAP = {
     "化學工業":         "chemical",
     "化學生技醫療":     "chemical",
     "塑膠工業":         "chemical",
-    # 生技
+    # 生技 (v3.4 Phase 2: 從化工拆出來)
     "生技醫療業":       "biotech",
     "生技醫療":         "biotech",
     # 機械
     "電機機械":         "machinery",
+    # 建材營造 (v3.4 Phase 2: 從 traditional 拆出,採完工比例法,前端顯示特殊備註)
+    "建材營造業":       "construction",
+    "建材營造":         "construction",
+    "營建":             "construction",
+    "營建業":           "construction",
+    # 公用事業 (v3.4 Phase 2)
+    "油電燃氣業":       "utility",
     # 傳產 (default catch)
     "水泥工業":         "traditional",
     "食品工業":         "traditional",
@@ -81,17 +87,34 @@ INDUSTRY_MAP = {
     "汽車工業":         "traditional",
     "航運業":           "traditional",
     "觀光事業":         "traditional",
+    "觀光餐旅":         "traditional",
     "貿易百貨":         "traditional",
-    "營建":             "traditional",
-    "建材營造":         "traditional",
+    "貿易百貨業":       "traditional",
     "通信網路業":       "traditional",
     "其他電子業":       "traditional",
+    "玻璃陶瓷":         "traditional",
+    "造紙工業":         "traditional",
+    "橡膠工業":         "traditional",
+    "其他業":           "traditional",
+    "其他":             "traditional",
+    "電子工業":         "traditional",
     # 金融
     "金融保險":         "finance",
     "金融保險業":       "finance",
     "金融":             "finance",
 }
 INDUSTRY_DEFAULT = "traditional"
+
+# ============================================================
+# Phase 2: 特殊產業處理規則 (Pipeline 端)
+# 前端 stock.html 內 industryNotes 表提供 UI 顯示,兩者要保持同步。
+# ============================================================
+# 強制 hasCL=false 的產業 (金融保險業無實質 IFRS 15 訂單池)
+INDUSTRY_FORCE_NO_CL = {"finance"}
+
+# 需要在前端顯示黃色備註提示的產業
+# (實際文案在 stock.html 內 industryNotes 定義)
+INDUSTRY_NOTED = {"finance", "construction"}
 
 # ============================================================
 # FinMind FS 科目 -> 我方欄位對照 (SPEC §5.2)
@@ -104,19 +127,16 @@ INDUSTRY_DEFAULT = "traditional"
 # 方便日後從 GitHub Actions log 反查真名再更新此表。
 # ============================================================
 FS_FIELD_MAP = {
-    "rev": ["Revenue"],
-    "gp":  ["GrossProfit"],
-    "op":  ["OperatingIncome"],
-    "np":  ["IncomeAfterTaxes"],
-    "eps": ["EPS"],
-    # 業外收支(合計):FinMind 實際用單數 Expense(v3.3 log 確認)
+    "rev": ["Revenue", "OperatingRevenue"],
+    "gp":  ["GrossProfit", "GrossProfitLoss"],
+    "op":  ["OperatingIncome", "OperatingIncomeLoss"],
     "noi": [
-        "TotalNonoperatingIncomeAndExpense",    # ← FinMind 真名(單數 Expense,首選)
-        "TotalNonoperatingIncomeAndExpenses",   # SPEC 原值(複數,備用)
-        "NonoperatingIncomeAndExpenses",        # 無 Total
-        "NonOperatingIncomeAndExpense",         # 無 Total + 單數
-        "NonOperatingIncome",                   # 只有 Income
+        "TotalNonoperatingIncomeAndExpense",   # ← FinMind 真名 (v3.3 log 確認,無 's')
+        "TotalNonOperatingIncomeAndExpenses",  # SPEC 原值 (備用)
+        "NonoperatingIncomeAndExpense",        # 無 Total 前綴
     ],
+    "np":  ["NetIncome", "NetIncomeLoss", "IncomeAfterTaxes"],
+    "eps": ["EPS", "BasicEPS", "EarningsPerShare"],
 }
 
 # BS 科目對照 (合約負債-流動 + 普通股股本)
@@ -154,7 +174,16 @@ for _p in (RAW_DIR, STOCKS_OUT_DIR, DATA_DIR, CACHE_DIR):
 # ============================================================
 # Universe (which stocks to build for)
 # ============================================================
-# 首版限縮於 SPEC §18.1 20 檔示範清單, 上線後改為全市場 upsert
+# v3.4 Phase 2: 全市場擴充
+#   USE_FULL_UNIVERSE = True  → 從 FinMind TaiwanStockInfo 過濾出全市場約 1,700 檔
+#   USE_FULL_UNIVERSE = False → 沿用 DEMO_UNIVERSE 20 檔示範清單 (dev/backward-compat)
+USE_FULL_UNIVERSE = True
+
+# 分批策略: 全市場 1,700 檔分 7 批,每天 03:30 TPE 執行下一批
+# 一週跑完全部 · 週而復始
+BATCH_COUNT = 7
+
+# 首版限縮於 SPEC §18.1 20 檔示範清單, USE_FULL_UNIVERSE=False 時使用
 DEMO_UNIVERSE = [
     # 半導體
     "2330",  # 台積電
