@@ -596,6 +596,7 @@ function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
 function sameRange(a, b) { return Number(a[0]) === Number(b[0]) && Number(a[1]) === Number(b[1]); }
 function isRangeActive(key, currentState = state) {
   const def = rangeDefs[key];
+  if (!def) return false; // v3.4: 舊 URL 殘留 vis 等已拿掉的 key 時保護
   return !sameRange(currentState.ranges[key], [def.min, def.max]);
 }
 function normalizeRange(raw, def) {
@@ -703,7 +704,7 @@ function debounce(fn, wait) {
 }
 
 function filterStocks() {
-  const clFiltersActive = isRangeActive('clYoY') || isRangeActive('vis');
+  const clFiltersActive = isRangeActive('clYoY'); // v3.4: vis 已拿掉
   const rows = scannerStocks.map(stock => ({ ...stock, score: healthScore(stock) })).filter(stock => {
     if (state.industry !== 'all' && stock.industry !== state.industry) return false;
     if (state.market !== 'all' && stock.market !== state.market) return false;
@@ -815,7 +816,7 @@ function renderPager(pages) {
   document.getElementById('pager').innerHTML = buttons.join('');
 }
 function updateHitStat() {
-  const clFiltersActive = isRangeActive('clYoY') || isRangeActive('vis');
+  const clFiltersActive = isRangeActive('clYoY'); // v3.4: vis 已拿掉
   const denominator = clFiltersActive ? scannerStocks.filter(stock => stock.hasCL).length : scannerStocks.length;
   const rate = denominator ? filteredList.length / denominator * 100 : 0;
   document.getElementById('hitStat').textContent = `命中 ${filteredList.length} 檔 / 全市場 ${denominator} 檔 (${rate.toFixed(1)}%)`;
