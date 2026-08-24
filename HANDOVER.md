@@ -535,6 +535,34 @@ GitHub Actions → Backfill (Scheduled 7-Batch) → Run workflow → 輸入 batc
 - 未強制時前端會顯示 CL 71,359 億 / rev 725 億 = 98 倍的荒謬數字
 - 詳見 §5-1
 
+### 7-3 · 部署歷程
+
+實際部署到 production 的時間點記錄,和 §7-1(特性完成日)分開追蹤,方便 debug 時精準定位「什麼時候切換到 XX 行為」。
+
+| 日期 (TPE) | 事件 | 對應 commit / run |
+|---|---|---|
+| 2026-08 早期 | v3.4 Phase 2 靜態上料:`pipeline/universe.py` 新增、`pipeline/config.py` 加入 Phase 2 常數(`USE_FULL_UNIVERSE=True`、`BATCH_COUNT=7`、`SCANNER_INDEX_PATH`、`DEMO_UNIVERSE`、`INDUSTRY_FORCE_NO_CL={"finance"}`、`INDUSTRY_NOTED={"finance","construction"}`)。但 `build.py` 還是舊版、不認新常數,實際 pipeline 仍走 DEMO 20 檔 | — |
+| 2026-08-24 | **Phase 2 排程啟用**:一次到位 3 個變更 —— `pipeline/build.py` 覆蓋為 Phase 2 版本(支援 `--batch N` + `_merge_scanner_index` + `USE_FULL_UNIVERSE` 分支)、`daily-build.yml` cron 改為 22:00 TPE(避開 03:30)、新增 `backfill-scheduled.yml` 觸發 7 批接力排程 | 本 commit + 前一筆 `Add files via upload`(2 個 YAML 一次上傳) |
+| 2026-08-25 22:00 | 首次 Phase 2 版 daily-build 執行(見下方過渡狀態) | 見 GitHub Actions |
+| 2026-08-26 03:30 | 首次 scheduled-backfill batch 執行 · batch = 238 % 7 = **0**(stocks[0:243]) | 見 GitHub Actions |
+| 2026-09-01 03:30 | 最後一批(batch 6)執行 · `scanner_index.json` 累積為完整全市場 ~1,700 檔 | 見 GitHub Actions |
+
+**⚠️ 已知過渡狀態(2026-08-25 ~ 08-31 · 約 6-7 天)**:
+
+`daily-build.yml` 每晚 22:00 會嘗試處理全部 ~1,700 檔(因為 `USE_FULL_UNIVERSE=True` 且未帶 `--batch`)。FinMind 免費層 500 req/hr × 每檔 3 request → 90 分鐘上限 = ~245 檔 API 呼叫 → **cache 覆蓋率必須 > 85% (~1,455 檔)daily-build 才可能在 90 分內完成**。快取由 `backfill-scheduled.yml` 每天 03:30 分批填充(每批 ~243 檔 · 7 天填滿)+ daily-build 每晚失敗前累積的 partial cache 共同貢獻。
+
+**預估時程**:
+
+- 2026-08-25 ~ 08-29(前 5 天):daily-build **幾乎必然 timeout**,不會 commit 任何資料
+- 2026-08-30 ~ 09-01(第 6-8 天):cache 覆蓋接近門檻,daily-build **有機會首次成功**
+- 2026-09-02 之後:cache 全滿,daily-build 應穩定成功(< 30 分鐘完成)
+
+首週 daily-build failure **是預期行為,不用手動介入**。若 2026-09-03 之後 daily-build 仍持續 timeout,才需要 debug。
+
+**加速選項(選用,不做也沒差)**:若不想看 6-7 天紅色 X,可在 `pipeline/config.py` 臨時把 `USE_FULL_UNIVERSE = False`,daily-build 會 fallback 到 `DEMO_UNIVERSE`(20 檔),立刻可用。等 backfill 跑完 7 批後(2026-09-02)再切回 `True`。
+
+---
+
 ---
 
 ## 8. AI 接手 checklist(新 AI 開始工作前先確認)
