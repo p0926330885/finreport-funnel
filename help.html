@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>使用說明 · 財報轉化漏斗</title>
+<style>
+:root {
+  --bg: #0f1216;
+  --panel: #171b21;
+  --panel-2: #1c2028;
+  --line: #262c36;
+  --brass: #d4a574;
+  --brass-line: #a8814f;
+  --brass-dim: rgba(212,165,116,0.15);
+  --text: #e8eaed;
+  --text-dim: #a0a5ad;
+  --text-muted: #6b7280;
+  --mint: #4ade80;
+  --amber: #fbbf24;
+  --coral: #f87171;
+  --font-num: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-sans: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bg); color: var(--text); font-family: var(--font-sans); line-height: 1.7; }
+body { min-height: 100vh; }
+
+/* topbar */
+.topbar {
+  height: 60px; background: var(--panel); border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 20px; padding: 0 24px;
+  position: sticky; top: 0; z-index: 40;
+}
+.brand { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; }
+.brand-logo {
+  width: 32px; height: 32px; border-radius: 6px;
+  background: var(--brass-dim); border: 1px solid var(--brass-line);
+  color: var(--brass); font-weight: 700; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.brand-text .brand-title { font-size: 15px; font-weight: 600; }
+.brand-text .brand-sub { font-size: 10px; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; }
+.nav-tabs { display: flex; gap: 4px; margin-left: 12px; }
+.nav-tab {
+  padding: 7px 12px; font-size: 13px; color: var(--text-dim);
+  border-radius: 8px; transition: 0.15s; text-decoration: none;
+}
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--brass); background: var(--brass-dim); }
+.topbar-spacer { flex: 1; }
+
+/* content */
+.wrap { max-width: 960px; margin: 0 auto; padding: 32px 24px 80px; }
+h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+.subtitle { color: var(--text-dim); font-size: 15px; margin-bottom: 32px; }
+.version { color: var(--brass); font-size: 12px; margin-left: 8px; }
+
+/* TOC */
+.toc {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 20px 24px; margin-bottom: 32px;
+}
+.toc-title {
+  color: var(--brass); font-size: 12px; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 12px; font-weight: 600;
+}
+.toc ol {
+  columns: 2; column-gap: 24px;
+  list-style: decimal inside;
+  color: var(--text-dim); font-size: 14px;
+}
+.toc ol li { padding: 4px 0; break-inside: avoid; }
+.toc a { color: var(--text-dim); text-decoration: none; }
+.toc a:hover { color: var(--brass); }
+
+/* Section */
+section.doc-section {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 28px 32px; margin-bottom: 24px;
+}
+section.doc-section h2 {
+  font-size: 20px; color: var(--brass);
+  margin-bottom: 12px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  scroll-margin-top: 80px;
+}
+section.doc-section h3 {
+  font-size: 16px; color: var(--text);
+  margin-top: 24px; margin-bottom: 10px;
+  font-weight: 600;
+}
+section.doc-section h4 {
+  font-size: 14px; color: var(--brass); font-weight: 600;
+  margin-top: 18px; margin-bottom: 8px;
+}
+section.doc-section p { margin-bottom: 12px; color: var(--text-dim); font-size: 14px; }
+section.doc-section p strong { color: var(--text); }
+section.doc-section ul, section.doc-section ol { margin: 8px 0 12px 20px; color: var(--text-dim); font-size: 14px; }
+section.doc-section ul li, section.doc-section ol li { padding: 3px 0; }
+section.doc-section code {
+  font-family: var(--font-num); font-size: 13px;
+  background: var(--panel-2); padding: 2px 6px; border-radius: 3px;
+  color: var(--brass);
+}
+section.doc-section pre {
+  background: var(--panel-2); padding: 12px 16px; border-radius: 6px;
+  overflow-x: auto; margin: 12px 0; font-family: var(--font-num); font-size: 12px;
+  color: var(--text-dim); line-height: 1.6;
+}
+
+/* Table */
+.doc-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+.doc-table th, .doc-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+.doc-table th { color: var(--brass); font-weight: 600; background: var(--panel-2); }
+.doc-table td { color: var(--text-dim); }
+.doc-table td strong { color: var(--text); }
+
+/* 提示框 */
+.note-box, .warn-box, .info-box {
+  padding: 12px 16px; margin: 12px 0; border-radius: 4px;
+  color: var(--text-dim); font-size: 13px;
+}
+.note-box  { background: rgba(212,165,116,0.06); border-left: 3px solid var(--brass); }
+.warn-box  { background: rgba(251,191,36,0.06);  border-left: 3px solid var(--amber); }
+.info-box  { background: rgba(74,222,128,0.06);  border-left: 3px solid var(--mint); }
+.note-box strong { color: var(--brass); display: block; margin-bottom: 4px; }
+.warn-box strong { color: var(--amber); display: block; margin-bottom: 4px; }
+.info-box strong { color: var(--mint);  display: block; margin-bottom: 4px; }
+
+/* Badge */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 500; }
+.badge-green { background: rgba(74,222,128,0.12); color: var(--mint); }
+.badge-amber { background: rgba(251,191,36,0.12); color: var(--amber); }
+.badge-red   { background: rgba(248,113,113,0.12); color: var(--coral); }
+
+/* 手機 */
+@media (max-width: 640px) {
+  .topbar { padding: 0 14px; gap: 10px; }
+  .brand-sub { display: none; }
+  .wrap { padding: 20px 16px 60px; }
+  h1 { font-size: 22px; }
+  section.doc-section { padding: 20px 18px; }
+  .toc ol { columns: 1; }
+  .doc-table { font-size: 12px; }
+  .doc-table th, .doc-table td { padding: 8px 6px; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="scanner.html" aria-label="財報轉化漏斗首頁">
+    <div class="brand-logo">F</div>
+    <div class="brand-text">
+      <div class="brand-title">財報轉化漏斗</div>
+      <div class="brand-sub">Financial Conversion Funnel</div>
+    </div>
+  </a>
+  <nav class="nav-tabs" aria-label="主要導覽">
+    <a class="nav-tab" href="scanner.html">選股掃描</a>
+    <a class="nav-tab" href="stock.html">個股詳細</a>
+    <a class="nav-tab active" href="help.html" aria-current="page">說明</a>
+  </nav>
+  <div class="topbar-spacer"></div>
+</header>
+
+<main class="wrap">
+  <h1>使用說明<span class="version">v3.4 · 全市場版</span></h1>
+  <p class="subtitle">財報轉化漏斗 · 涵蓋台股上市/上櫃/KY 普通股 1,700+ 檔 · 每日自動更新</p>
+
+  <div class="toc">
+    <div class="toc-title">目錄</div>
+    <ol>
+      <li><a href="#intro">這是什麼工具</a></li>
+      <li><a href="#universe">標的收錄範圍</a></li>
+      <li><a href="#pages">兩個頁面的用途</a></li>
+      <li><a href="#scanner">選股掃描頁</a></li>
+      <li><a href="#stock">個股詳細頁</a></li>
+      <li><a href="#update">更新機制與排程</a></li>
+      <li><a href="#special">特殊產業備註</a></li>
+      <li><a href="#templates">策略模板複選</a></li>
+      <li><a href="#practice">全市場選股實務教學</a></li>
+      <li><a href="#faq">常見問題 FAQ</a></li>
+      <li><a href="#glossary">名詞對照表</a></li>
+      <li><a href="#disclaimer">責任聲明</a></li>
+    </ol>
+  </div>
+
+  <!-- 1. 這是什麼工具 -->
+  <section class="doc-section" id="intro">
+    <h2>1. 這是什麼工具</h2>
+    <p>一個台股基本面分析網站,涵蓋<strong>台灣上市/上櫃/KY 普通股共約 1,700 檔</strong>,幫你:</p>
+    <ol>
+      <li><strong>從全市場快速篩選</strong>符合條件的股票(如「毛利率 &gt;40% 且營收 YoY &gt;20%」)</li>
+      <li><strong>深入單一個股</strong>看財報結構、獲利品質、訂單能見度、月營收動能</li>
+    </ol>
+    <p>資料<strong>每日自動更新</strong>,來自 FinMind 台股 API(公開財報 + 月營收)。</p>
+    <div class="warn-box">
+      <strong>⚠️ 免責提醒</strong>
+      本站只呈現公開數字,不做投資建議。
+    </div>
+  </section>
+
+  <!-- 2. Universe -->
+  <section class="doc-section" id="universe">
+    <h2>2. 標的收錄範圍(Universe 定義)</h2>
+
+    <h3>✅ 收錄範圍(約 1,700-1,800 檔)</h3>
+    <table class="doc-table">
+      <tr><th>類型</th><th>說明</th><th>代表</th></tr>
+      <tr><td><strong>TWSE 上市普通股</strong></td><td>集中市場上市的普通股</td><td>2330 台積電、1216 統一</td></tr>
+      <tr><td><strong>OTC 上櫃普通股</strong></td><td>櫃買中心上櫃的普通股</td><td>6488 環球晶、3105 穩懋</td></tr>
+      <tr><td><strong>KY / F 股</strong></td><td>台灣存託憑證第一上市股(海外註冊、在台掛牌)</td><td>6415 矽力-KY、5871 中租-KY</td></tr>
+    </table>
+
+    <h3>❌ 排除範圍(不收錄)</h3>
+    <table class="doc-table">
+      <tr><th>類型</th><th>為什麼排除</th></tr>
+      <tr><td><strong>ETF</strong>(0050、006208、00929 等)</td><td>投資組合工具,不是單一公司,基本面分析不適用</td></tr>
+      <tr><td><strong>TDR</strong>(第二上市存託憑證)</td><td>海外公司間接掛牌,財報結構複雜、揭露不完整</td></tr>
+      <tr><td><strong>興櫃股票</strong></td><td>揭露義務較弱,月營收 / 季報資料不穩定</td></tr>
+      <tr><td><strong>公發未上市</strong></td><td>未進入公開市場交易</td></tr>
+      <tr><td><strong>特別股 / 認購售權證 / 可轉債</strong></td><td>非普通股,無獨立財報</td></tr>
+    </table>
+
+    <h3>🔍 如何確認股票是否收錄</h3>
+    <p>在右上角搜尋框輸入股號或名稱:</p>
+    <ul>
+      <li>有 dropdown 出現 → 已收錄</li>
+      <li>Dropdown 無結果 → 屬於上表排除類型</li>
+    </ul>
+    <p>例:搜尋 <code>0050</code> 找不到 = ETF · 不是系統異常 · 屬於「投資組合工具」不在本站分析範圍。</p>
+  </section>
+
+  <!-- 3. Two pages -->
+  <section class="doc-section" id="pages">
+    <h2>3. 兩個頁面的用途</h2>
+    <h3>🔍 選股掃描(scanner)</h3>
+    <p>從全市場 1,700 檔快速篩選:「毛利率 &gt;40% 且營收 YoY &gt;20% 且有訂單池」的股票有哪些?</p>
+    <p><strong>用途</strong>:發現新標的、快速淘汰不符合條件的股。</p>
+    <h3>📊 個股詳細(stock)</h3>
+    <p>輸入股號(如 2330 台積電)看:這一季獲利怎麼賺的、三率是紅是綠、訂單池深不深、當季狀態如何。</p>
+    <p><strong>用途</strong>:確認個股體質、追蹤季度變化。</p>
+  </section>
+
+  <!-- 4. Scanner -->
+  <section class="doc-section" id="scanner">
+    <h2>4. 選股掃描頁</h2>
+
+    <h3>頂部 · 命中率統計</h3>
+    <pre>命中 45 檔 / 全市場 1,724 檔(2.6%)</pre>
+    <p>命中率愈低,條件愈嚴格。全市場擴充版下,合理命中率通常介於 0.5% - 20%。</p>
+
+    <h3>左側 sidebar · 篩選條件</h3>
+
+    <h4>分類</h4>
+    <ul>
+      <li><strong>產業</strong>:全部 / 半導體 / 電子零組件 / 系統整合 / 傳產 / 金融 / 化工 / 生技 / 機械 / 建材營造 等</li>
+      <li><strong>市場</strong>:全部 / TWSE 上市 / OTC 上櫃</li>
+    </ul>
+
+    <h4>財務健康度(3 個 slider)</h4>
+    <table class="doc-table">
+      <tr><th>指標</th><th>意義</th><th>綠燈</th><th>黃燈</th><th>紅燈</th></tr>
+      <tr><td><strong>毛利率</strong></td><td>(營收-營業成本) ÷ 營收</td><td><span class="badge badge-green">≥25%</span></td><td><span class="badge badge-amber">15-25%</span></td><td><span class="badge badge-red">&lt;15%</span></td></tr>
+      <tr><td><strong>營益率</strong></td><td>營業利益 ÷ 營收(最重要)</td><td><span class="badge badge-green">≥8%</span></td><td><span class="badge badge-amber">3-8%</span></td><td><span class="badge badge-red">&lt;3%</span></td></tr>
+      <tr><td><strong>淨利率</strong></td><td>稅後淨利 ÷ 營收</td><td><span class="badge badge-green">≥5%</span></td><td><span class="badge badge-amber">2-5%</span></td><td><span class="badge badge-red">&lt;2%</span></td></tr>
+    </table>
+
+    <h4>成長動能</h4>
+    <ul><li><strong>營收 YoY</strong>:相較去年同期營收的變化。<strong>&gt;15% 為強勁成長</strong>、<strong>&lt;0% 為衰退</strong></li></ul>
+
+    <h4>訂單能見度</h4>
+    <ul><li><strong>合約負債 YoY</strong>:合約負債期末相較去年同期的變化。<strong>&gt;30% 訂單池強勁累積</strong>、<strong>&lt;0% 訂單轉弱</strong></li></ul>
+    <div class="warn-box">
+      <strong>注意</strong>
+      啟用此條件時,<strong>自動排除沒有合約負債的股票</strong>(如金融股、純服務業)。
+    </div>
+
+    <h4>交叉指標</h4>
+    <ul><li><strong>3MA vs 12MA 近 1 月黃金交叉</strong>:月營收 3 月均線由下穿越 12 月均線 = 動能轉正訊號</li></ul>
+
+    <h3>上方 · 4 個策略模板(可複選,詳見第 8 節)</h3>
+    <table class="doc-table">
+      <tr><th>模板</th><th>意義</th><th>全市場預估命中</th></tr>
+      <tr><td><strong>訂單池累積、認列跟上</strong></td><td>訂單池累積 + 營收跟著增長</td><td>30-80 檔</td></tr>
+      <tr><td><strong>本業獲利穩健</strong></td><td>毛利率高 + 營益率穩(適合長期持有)</td><td>200-400 檔</td></tr>
+      <tr><td><strong>三率同升</strong></td><td>三率同時提升(獲利品質全面改善)</td><td>100-300 檔</td></tr>
+      <tr><td><strong>動能轉正</strong></td><td>近期月營收動能轉正 + 體質健康</td><td>50-150 檔</td></tr>
+    </table>
+
+    <h3>中間 · 結果表</h3>
+    <table class="doc-table">
+      <tr><th>欄位</th><th>意義</th></tr>
+      <tr><td>股號 / 名稱</td><td>公司代號和中文名</td></tr>
+      <tr><td>產業</td><td>半導體 / 傳產 / 金融 / 建材營造 等</td></tr>
+      <tr><td>當季營收</td><td>最新一季認列的營收</td></tr>
+      <tr><td>營收 YoY</td><td>相較去年同期營收變化</td></tr>
+      <tr><td>營益率</td><td>本業獲利率</td></tr>
+      <tr><td><strong>健康度總分</strong></td><td>4 指標各 0-2 分,加總 0-8 分 · <span class="badge badge-green">≥6 綠</span> <span class="badge badge-amber">3-5.9 黃</span> <span class="badge badge-red">&lt;3 紅</span></td></tr>
+    </table>
+    <p>點任一列 → 跳到該股票的個股詳細頁。</p>
+
+    <h3>右上角 · 智慧搜尋框</h3>
+    <ul>
+      <li>輸入純數字(如 <code>2330</code>)按 Enter → 直接跳到該股個股頁</li>
+      <li>輸入中文(如「台積」、「聯發」、「金」)→ 下拉推薦符合的股票</li>
+      <li>支援模糊搜尋(substring 匹配)</li>
+    </ul>
+  </section>
+
+  <!-- 5. Stock -->
+  <section class="doc-section" id="stock">
+    <h2>5. 個股詳細頁</h2>
+
+    <h3>頂部 · 股票基本資訊</h3>
+    <pre>2330 台積電
+[系統整合] [含合約負債] [最新財報 2026/2Q] [最新月營收 2026-08]</pre>
+    <ul>
+      <li><strong>含合約負債</strong> tag:表示這公司訂單池夠深(合約負債佔營收 &gt;15%),個股頁會多顯示「訂單能見度」相關資訊</li>
+    </ul>
+
+    <h3>板塊 1 · 訂單能見度</h3>
+    <p><strong>適用</strong>:製造業、半導體設備、觀光票券、預售屋等訂單型公司<br>
+    <strong>不適用</strong>:金融股(pipeline 強制隱藏)、純服務業(自動偵測)</p>
+
+    <h4>5 個 KPI 卡片</h4>
+    <table class="doc-table">
+      <tr><th>卡片</th><th>意義</th><th>判讀</th></tr>
+      <tr><td><strong>合約負債期末</strong></td><td>客戶已下單、公司預收但還沒認列營收的金額</td><td>絕對數字,配合佔比才有意義</td></tr>
+      <tr><td><strong>YoY 年增率</strong></td><td>相較去年同期變化</td><td>&gt;30% 訂單強勁累積、&lt;0% 訂單轉弱</td></tr>
+      <tr><td><strong>QoQ 季增率</strong></td><td>相較上一季變化</td><td>&gt;0 短期加溫</td></tr>
+      <tr><td><strong>佔季營收比</strong></td><td>合約負債 ÷ 當季認列營收</td><td>&gt;50% 通常代表訂單充足</td></tr>
+      <tr><td><strong>佔股本比</strong></td><td>合約負債 ÷ 普通股股本</td><td>100% = 一倍股本、200% = 兩倍股本</td></tr>
+    </table>
+    <div class="note-box">
+      <strong>產業差異</strong>
+      製造業佔股本比 30-200% 屬正常。<strong>營建業佔股本比可能 500%+ 屬正常</strong>(採完工比例法,見第 7 節)。
+    </div>
+
+    <h3>板塊 2 · 營收轉換漏斗</h3>
+    <p>當季 100 元營收,一路轉化到最後剩多少稅後淨利。</p>
+    <pre>營業收入 100%              ← 起點
+  ↓ 減營業成本(毛利率)
+營業毛利                    ← 反映定價力
+  ↓ 減營業費用(毛利轉化率)
+營業利益                    ← 反映本業獲利力 · 最重要
+  ↓ 加減業外收支、稅
+稅後淨利                    ← 對外公告獲利</pre>
+    <ul>
+      <li><span class="badge badge-red">紅色</span>損耗比 &gt;50%(嚴重侵蝕)</li>
+      <li><span class="badge badge-amber">黃色</span>損耗比 30-50%(可接受)</li>
+      <li><span class="badge badge-green">綠色</span>損耗比 &lt;30%(健康)</li>
+    </ul>
+    <div class="warn-box">
+      <strong>金融股例外</strong>
+      漏斗會顯示 0.0% 三率,屬產業結構正常現象,頁面會顯示金融股備註提示(見第 7 節)。
+    </div>
+
+    <h3>板塊 3 · 品質儀表</h3>
+    <p>4 個小方塊顯示三率 + 業外占淨利的 QoQ 變化。綠色 = 改善、黃色 = 持平、紅色 = 惡化。</p>
+
+    <h3>板塊 4 · 自動判讀(4-5 條)</h3>
+    <table class="doc-table">
+      <tr><th>條號</th><th>內容</th></tr>
+      <tr><td><strong>s01 · 主判讀</strong></td><td>從 10 種模式中判定當季狀態(如「本業強勁 · M01」)</td></tr>
+      <tr><td>s02 · 毛利率補充</td><td>說明毛利率狀態、和去年同期比較</td></tr>
+      <tr><td>s03 · 營益率補充</td><td>說明營益率、費用控制狀態</td></tr>
+      <tr><td>s04 · 業外補充</td><td>說明業外占淨利比例</td></tr>
+      <tr><td>s05 · 訂單能見度</td><td><em>僅 hasCL 股</em> · 「本季合約負債 X 百萬,佔股本 X.X 倍」</td></tr>
+    </table>
+
+    <h3>板塊 5 · 成長率分析</h3>
+    <p>Chart + 表格顯示 20 季(5 年)的變化。可切換指標(營收/毛利/營益/淨利/EPS/合約負債)和模式(YoY / QoQ)。</p>
+
+    <h3>板塊 6 · 月營收動能</h3>
+    <p>顯示近 60 個月(5 年)的月營收 bar,並疊上 3MA / 6MA / 12MA 三條均線。</p>
+    <ul>
+      <li>🟢 <strong>黃金交叉</strong>:3MA 由下穿越 12MA · 動能轉正</li>
+      <li>🔴 <strong>死亡交叉</strong>:3MA 由上跌破 12MA · 動能轉負</li>
+    </ul>
+
+    <h3>板塊 7 · 季度資料表(4 個 tab)</h3>
+    <ul>
+      <li><strong>標準</strong>:季度 · 營收 · 三率 · EPS(概觀)</li>
+      <li><strong>完整</strong>:多加毛利/營益/淨利絕對值 · 業外 · 佔營收比等</li>
+      <li><strong>合約負債明細</strong>(僅 hasCL 股):合約負債 · 季增率 · 年增率 · 佔營收比 · 佔股本比</li>
+      <li><strong>成長率</strong>:各指標的 YoY / QoQ 動態</li>
+    </ul>
+  </section>
+
+  <!-- 6. Update -->
+  <section class="doc-section" id="update">
+    <h2>6. 更新機制與排程</h2>
+
+    <h3>每日排程(GitHub Actions)</h3>
+    <ul>
+      <li><strong>執行時間</strong>:每天台北時間 03:30 自動啟動</li>
+      <li><strong>處理範圍</strong>:全市場 1,700 檔股票</li>
+      <li><strong>分批處理</strong>:分 7 批執行(受 FinMind API 每分鐘 60 req 限制,單批耗時約 7-8 分鐘)</li>
+      <li><strong>每檔股票處理內容</strong>:抓取 20 季財報 + 60 個月月營收 + 產出 stock.json + 更新 scanner_index.json</li>
+      <li><strong>完成時間</strong>:通常 50-60 分鐘(全部批次)</li>
+    </ul>
+
+    <h3>月營收更新時點</h3>
+    <p>依台灣證交所規定:</p>
+    <ul>
+      <li>上市 / 上櫃公司必須在<strong>每月 10 日前</strong>公布上個月營收</li>
+      <li>系統會在 <strong>10-12 日之間</strong>自動抓入最新數字</li>
+      <li>首頁右上角「資料 YYYY-MM-DD」= pipeline 最後成功執行時間</li>
+    </ul>
+
+    <h3>季報更新時點</h3>
+    <table class="doc-table">
+      <tr><th>季別</th><th>法定截止日</th></tr>
+      <tr><td>Q1(1-3 月)</td><td>5 月 15 日前</td></tr>
+      <tr><td>Q2(4-6 月)</td><td>8 月 14 日前</td></tr>
+      <tr><td>Q3(7-9 月)</td><td>11 月 14 日前</td></tr>
+      <tr><td>Q4(全年報)</td><td>隔年 3 月 31 日前</td></tr>
+    </table>
+    <p>系統會在公司公布後 3 個工作天內抓入。</p>
+
+    <h3>檢查資料是否為最新</h3>
+    <p>打開首頁,看右上角:</p>
+    <pre>● 資料 2026-08-24</pre>
+    <p>若日期為今天或昨天 = 資料為最新。若超過 7 天 = 可能 pipeline 暫停,請聯絡管理員。</p>
+  </section>
+
+  <!-- 7. Special -->
+  <section class="doc-section" id="special">
+    <h2>7. 特殊產業備註</h2>
+    <p>有些產業因為業務性質特殊,財報結構和一般製造/科技業不同。系統會在個股頁自動顯示<strong>黃色 amber 提示框</strong>,說明「這是產業正常現象,不是資料異常」。</p>
+
+    <h3>7-1 · 金融業(銀行 / 保險 / 證券)</h3>
+    <p><strong>代表</strong>:2882 國泰金、2891 中信金、2884 玉山金、2823 中壽</p>
+    <p><strong>結構特殊之處</strong>:</p>
+    <ul>
+      <li>金融資產不適用 IFRS 15 收入認列準則,<strong>沒有實質「訂單池」概念</strong></li>
+      <li>損益結構為「利差收入 / 保費 / 手續費 → 提存準備 → 稅後淨利」</li>
+      <li>不含「營業成本 → 毛利 → 營業費用 → 營業利益」三段式概念</li>
+    </ul>
+    <table class="doc-table">
+      <tr><th>細分</th><th>主要收入</th></tr>
+      <tr><td><strong>銀行</strong></td><td>利差(存放款利差)+ 手續費(信託、財管、外匯)</td></tr>
+      <tr><td><strong>保險</strong></td><td>保費收入 - 準備金提存 + 投資收益</td></tr>
+      <tr><td><strong>證券</strong></td><td>經紀手續費 + 自營損益 + 投銀收入</td></tr>
+    </table>
+    <p><strong>頁面上會發生的事</strong>:</p>
+    <ul>
+      <li>漏斗中<strong>毛利率、營益率顯示為 0.0%</strong> ← 正常現象</li>
+      <li>訂單能見度區塊<strong>自動隱藏</strong>(pipeline 內強制 hasCL=false)</li>
+      <li>自動判讀<strong>只有 4 條</strong>(s05 訂單能見度不出現)</li>
+    </ul>
+    <div class="info-box">
+      <strong>建議</strong>
+      看金融股請改用「成長率分析」和「月營收動能」。深度分析建議搭配公開資訊觀測站的金融業季報揭露(如 ROE、NPL、資本適足率)。
+    </div>
+
+    <h3>7-2 · 建材營造 / 統包工程業</h3>
+    <p><strong>代表</strong>:2597 潤弘、5522 遠雄、2542 興富發、2545 皇翔</p>
+    <p><strong>結構特殊之處</strong>:</p>
+    <ul>
+      <li>採用 IFRS 15「<strong>完工比例法</strong>」認列營收(依工程進度按比例)</li>
+      <li>合約負債 = 客戶已預付但工程未完工的金額</li>
+      <li>例:預售屋在完工前,客戶付的訂金全部列為合約負債</li>
+    </ul>
+    <p><strong>頁面上會發生的事</strong>:</p>
+    <ul>
+      <li>訂單能見度<strong>佔股本比可能 500% 以上</strong>(甚至數倍)· 屬正常</li>
+      <li>營收季度變動大(大工程完工時點集中,單季爆量後可能連續數季 0 認列)</li>
+      <li>三率會呈現週期性波動,不像製造業穩定</li>
+    </ul>
+    <div class="info-box">
+      <strong>建議</strong>
+      不用「佔股本比」單一指標判斷體質。搭配「成長率分析」看長期趨勢(平均 4-8 季)。深度分析建議搭配公開資訊觀測站的承攬總額、在建工程進度、預售屋去化率。
+    </div>
+
+    <h3>7-3 · 未來擴充其他特殊產業</h3>
+    <div class="note-box">
+      <strong>擴充架構</strong>
+      系統採「通用產業備註表」架構,未來擴充其他特殊產業(如公用事業、生技新藥、資產營建)只需在 pipeline 加對應 industry key,前端即可自動顯示對應備註框。
+    </div>
+  </section>
+
+  <!-- 8. Templates -->
+  <section class="doc-section" id="templates">
+    <h2>8. 策略模板複選(v3.4 新功能)</h2>
+    <p>選股掃描頁上方 4 個模板 pill 按鈕支援<strong>複選</strong>,可以同時套用多個嚴格條件精選標的。</p>
+
+    <h3>操作方式</h3>
+    <ul>
+      <li>點一下 pill → 選中(高亮 brass 色)</li>
+      <li>再點一下 pill → 取消(恢復灰色)</li>
+      <li>可<strong>同時選多個模板</strong></li>
+    </ul>
+
+    <h3>邏輯 · AND 交集(嚴格篩選)</h3>
+    <p>勾選多個模板時,股票必須<strong>同時符合所有選中的條件</strong>才會出現。條件愈多,命中愈少。</p>
+    <div class="note-box">
+      <strong>實例</strong>
+      同時勾「三率同升」+「動能轉正」= 找到「三率同時上升」<strong>且</strong>「近期營收動能轉正」的優質股。全市場預估命中 20-50 檔。
+    </div>
+
+    <h3>與 sidebar slider 的關係 · 獨立疊加</h3>
+    <p>模板規則<strong>不會覆蓋</strong>左側 sidebar 手動拉的 slider 值。兩者最後 AND 交集判定。</p>
+    <div class="note-box">
+      <strong>實例</strong>
+      Sidebar 拉「毛利率 &gt; 40%」+ 勾「三率同升」模板 = 找到「毛利率 &gt; 40% 且三率同時上升」的股。你手動拉的 slider 值會被保留。
+    </div>
+
+    <div class="warn-box">
+      <strong>提示</strong>
+      勾多個嚴格條件時,可能出現「無符合條件的股票」空狀態,這是正常現象。放寬其中一個模板或 slider 條件即可。
+    </div>
+
+    <h3>4 個模板的隱含規則</h3>
+    <table class="doc-table">
+      <tr><th>模板</th><th>隱含規則(股票必須符合)</th></tr>
+      <tr><td><strong>訂單池累積、認列跟上</strong></td><td>有合約負債 · 且 clYoY ≥ 30% · 且 revYoY ≥ 15%</td></tr>
+      <tr><td><strong>本業獲利穩健</strong></td><td>營益率 ≥ 8% · 且 |業外占淨利| &lt; 25%</td></tr>
+      <tr><td><strong>三率同升</strong></td><td>毛利率 QoQ ≥ 0 · 且 營益率 QoQ ≥ 0 · 且 淨利率 QoQ ≥ 0</td></tr>
+      <tr><td><strong>動能轉正</strong></td><td>近 1 月 3MA vs 12MA 黃金交叉</td></tr>
+    </table>
+  </section>
+
+  <!-- 9. Practice -->
+  <section class="doc-section" id="practice">
+    <h2>9. 全市場選股實務教學</h2>
+    <p>以下 3 個實例展示如何在全市場 1,700 檔中精準撈出優質標的。</p>
+
+    <h3>實例 1 · 找「訂單池爆發 + 三率同升」的波段成長股</h3>
+    <p><strong>適用場景</strong>:找短中期高成長股(訂單池累積 + 獲利品質改善)</p>
+    <p><strong>操作</strong>:</p>
+    <ol>
+      <li>勾模板「<strong>訂單池累積、認列跟上</strong>」+ 勾「<strong>三率同升</strong>」</li>
+      <li>Sidebar 補條件:健康度總分(自動顯示 ≥6 為綠燈)</li>
+      <li>預期命中:<strong>5-15 檔</strong>(全市場)</li>
+    </ol>
+    <p><strong>判讀步驟</strong>:</p>
+    <ol>
+      <li>表格依「營收 YoY 降序」排,找 YoY 最高的</li>
+      <li>點進個股頁 → 看「訂單能見度」板塊 → <strong>佔股本比 &gt;50%</strong> 為佳</li>
+      <li>看「自動判讀 s01」→ 是否為「M01 本業強勁」或「M05 訂單累積」</li>
+      <li>看「成長率分析」→ 近 4 季合約負債 YoY 是否<strong>加速</strong></li>
+    </ol>
+
+    <h3>實例 2 · 找「本業穩健 + 現金流優」的定存股</h3>
+    <p><strong>適用場景</strong>:長期持有領股息,避免營收暴衝股</p>
+    <p><strong>操作</strong>:</p>
+    <ol>
+      <li>勾模板「<strong>本業獲利穩健</strong>」</li>
+      <li>Sidebar 補條件:
+        <ul>
+          <li>毛利率 30-100%(避免超低毛利)</li>
+          <li>營收 YoY 0-30%(避免暴衝暴跌)</li>
+        </ul>
+      </li>
+      <li>預期命中:<strong>50-150 檔</strong>(全市場)</li>
+    </ol>
+    <p><strong>判讀步驟</strong>:</p>
+    <ol>
+      <li>表格依「健康度總分」降序 · 找 ≥7 分的</li>
+      <li>點進個股頁 → 看「營收轉換漏斗」→ 每層漏斗<strong>顏色都是綠色</strong>為佳</li>
+      <li>看「品質儀表」→ 三率 QoQ 變化<strong>穩定或改善</strong></li>
+      <li>看「月營收動能」→ 12MA 平緩上升(不是暴衝)</li>
+    </ol>
+    <div class="warn-box">
+      <strong>注意</strong>
+      本站沒有股息、本益比、股價資料,實務投資請搭配券商 App 查詢當前價格和殖利率。
+    </div>
+
+    <h3>實例 3 · 找「動能反轉」的短期反彈股</h3>
+    <p><strong>適用場景</strong>:找探底反彈、超跌回補的短線標的</p>
+    <p><strong>操作</strong>:</p>
+    <ol>
+      <li>勾模板「<strong>動能轉正</strong>」</li>
+      <li>Sidebar 補條件:營收 YoY -30 ~ 5%(近期跌深但沒崩)</li>
+      <li>預期命中:<strong>10-30 檔</strong>(全市場)</li>
+    </ol>
+    <p><strong>判讀步驟</strong>:</p>
+    <ol>
+      <li>表格依「營收 YoY 升序」排,找剛從谷底回升的</li>
+      <li>點進個股頁 → 看「月營收動能」chart → <strong>確認綠色黃金交叉點在近 30 天內</strong></li>
+      <li>看「自動判讀 s01」→ 是否為「M09 動能轉正」</li>
+      <li>看「成長率分析· QoQ 模式」→ 各指標<strong>是否連續 2-3 季轉正</strong></li>
+    </ol>
+    <div class="warn-box">
+      <strong>注意</strong>
+      動能轉正只是月營收訊號,實務投資請搭配技術面(K 線、量能、法人籌碼)。
+    </div>
+
+    <h3>策略組合思路速查</h3>
+    <table class="doc-table">
+      <tr><th>目標</th><th>建議模板組合</th><th>Sidebar 建議條件</th></tr>
+      <tr><td>短期波段股</td><td>訂單池累積 + 三率同升</td><td>毛利率 ≥30%</td></tr>
+      <tr><td>定存股</td><td>本業獲利穩健</td><td>淨利率 ≥8%、YoY 波動小</td></tr>
+      <tr><td>反彈股</td><td>動能轉正</td><td>YoY 剛轉正</td></tr>
+      <tr><td>訂單型潛力</td><td>訂單池累積</td><td>合約負債 YoY ≥50%</td></tr>
+      <tr><td>高獲利品質</td><td>三率同升 + 本業獲利穩健</td><td>營益率 ≥15%</td></tr>
+    </table>
+  </section>
+
+  <!-- 10. FAQ -->
+  <section class="doc-section" id="faq">
+    <h2>10. 常見問題 FAQ</h2>
+
+    <h3>Q1 · 為什麼搜尋 0050、006208 這些 ETF 找不到?</h3>
+    <p>本站的資料範圍為「<strong>單一公司普通股</strong>」,不含 ETF、TDR、興櫃、公發未上市。詳細收錄範圍見<a href="#universe">第 2 節「標的收錄範圍」</a>。</p>
+
+    <h3>Q2 · 為什麼搜尋某些股(如興櫃股)找不到?</h3>
+    <p>參見<a href="#universe">第 2 節「標的收錄範圍」</a>。若搜尋不到某股,通常屬於以下類型:</p>
+    <ul>
+      <li>ETF:如 0050、006208、00929</li>
+      <li>TDR:如 9105 泰金寶-DR</li>
+      <li>興櫃股(尚未轉上市/櫃)</li>
+      <li>特別股、權證、可轉債</li>
+    </ul>
+    <p><strong>其他情況</strong>(如新上市不到 1 週),請等待下個排程週期(隔日 03:30 後)。</p>
+
+    <h3>Q3 · 為什麼 2330 台積電沒有「合約負債明細」tab?</h3>
+    <p>因為 FinMind 對 2330 的資產負債表沒有揭露 <code>CurrentContractLiabilities</code> 欄位(可能是財報揭露方式不同,或該公司合約負債佔比未達 15% 門檻)。系統偵測到後自動判定為「無合約負債」,隱藏相關 UI。<strong>不是 bug</strong>。</p>
+
+    <h3>Q4 · 為什麼金融股(2882 國泰金)看到營收但毛利率、營益率是 0.0%?</h3>
+    <p>金融股(銀行/保險/證券)的損益結構完全不同 —— 沒有「營業成本 → 毛利 → 營業費用 → 營業利益」的三段概念。系統會在漏斗上方顯示黃色提示框說明,<strong>不是資料異常</strong>。詳見<a href="#special">第 7 節</a>。</p>
+
+    <h3>Q5 · 為什麼營建股(如遠雄、興富發)訂單能見度佔股本比顯示很高(500%+)?</h3>
+    <p>因為營建業採「完工比例法」認列營收,合約負債(工程未認列部分)通常規模龐大,達股本數倍。<strong>屬產業正常現象</strong>,系統會顯示營建股備註提示。詳見<a href="#special">第 7 節</a>。</p>
+
+    <h3>Q6 · 「健康度總分」怎麼算?</h3>
+    <p>4 個核心指標各 0-2 分:</p>
+    <table class="doc-table">
+      <tr><th>指標</th><th>綠(2 分)</th><th>黃(1 分)</th><th>紅(0 分)</th></tr>
+      <tr><td>毛利率</td><td>≥25%</td><td>15-25%</td><td>&lt;15%</td></tr>
+      <tr><td>營益率</td><td>≥8%</td><td>3-8%</td><td>&lt;3%</td></tr>
+      <tr><td>淨利率</td><td>≥5%</td><td>2-5%</td><td>&lt;2%</td></tr>
+      <tr><td>業外占淨利</td><td>≤10%</td><td>10-30%</td><td>&gt;30%</td></tr>
+    </table>
+    <p>加總 0-8 分。<span class="badge badge-green">≥6 綠</span>(體質健康)<span class="badge badge-amber">3-5.9 黃</span>(觀察)<span class="badge badge-red">&lt;3 紅</span>(需注意)。</p>
+
+    <h3>Q7 · 「合約負債」到底是什麼?</h3>
+    <p>= 客戶已下單、公司<strong>已收到錢</strong>但<strong>還沒交貨/認列營收</strong>的金額。</p>
+    <ul>
+      <li>對訂單型公司(半導體設備、EMS、觀光票券):合約負債 = <strong>未來營收的預告</strong>,累積代表訂單池充足</li>
+      <li>佔股本比 = 訂單池規模相對公司資本的倍數</li>
+      <li>佔營收比 = 訂單池能撐幾個季度的營收</li>
+    </ul>
+
+    <h3>Q8 · 資料多久更新一次?</h3>
+    <p><strong>每天自動更新</strong>(GitHub Actions 排程,台北時間 03:30 執行,約 50-60 分鐘完成全部 1,700 檔)。右上角「資料 YYYY-MM-DD」顯示最後更新日。詳見<a href="#update">第 6 節</a>。</p>
+
+    <h3>Q9 · 手機能用嗎?</h3>
+    <p>可以。手機上:</p>
+    <ul>
+      <li>選股掃描的篩選 sidebar 會收合成 drawer(點「篩選 (N)」按鈕滑出)</li>
+      <li>表格改為卡片式,方便滑動瀏覽</li>
+      <li>個股頁 chart 支援縮放</li>
+      <li>搜尋框跳純數字鍵盤(方便輸入股號)</li>
+    </ul>
+
+    <h3>Q10 · 我按「動能轉正」+「訂單池累積」為什麼命中 0 檔?</h3>
+    <p>因為兩個模板都是<strong>嚴格條件</strong>,同時符合的股票本來就少。全市場 1,700 檔中可能只有 5-20 檔同時符合。</p>
+    <p><strong>解決</strong>:取消其中一個模板 + Sidebar 拉寬條件 · 或改用單一模板。</p>
+  </section>
+
+  <!-- 11. Glossary -->
+  <section class="doc-section" id="glossary">
+    <h2>11. 名詞對照表(和常見券商 App 命名差異)</h2>
+    <table class="doc-table">
+      <tr><th>本站用詞</th><th>券商常見用詞</th><th>白話解釋</th></tr>
+      <tr><td>毛利轉化率</td><td>費用率 / 銷管研</td><td>從毛利被費用吃掉多少</td></tr>
+      <tr><td>合約負債</td><td>預收款項 / 訂金</td><td>客戶預付、公司待交貨的金額</td></tr>
+      <tr><td>訂單能見度</td><td>在手訂單</td><td>手上訂單能撐多久</td></tr>
+      <tr><td>業外收支</td><td>營業外損益</td><td>本業以外的錢(利息、匯兌、投資)</td></tr>
+      <tr><td>佔股本比</td><td>(無對應)</td><td>合約負債相對股本規模</td></tr>
+      <tr><td>YoY</td><td>年增率</td><td>相較去年同期</td></tr>
+      <tr><td>QoQ</td><td>季增率</td><td>相較上一季</td></tr>
+      <tr><td>3MA / 12MA</td><td>3 月線 / 12 月線</td><td>月營收的移動平均</td></tr>
+      <tr><td>黃金交叉</td><td>3MA 上穿 12MA</td><td>短期動能翻轉為正</td></tr>
+    </table>
+  </section>
+
+  <!-- 12. Disclaimer -->
+  <section class="doc-section" id="disclaimer">
+    <h2>12. 責任聲明</h2>
+    <ul>
+      <li>本工具僅呈現公開財報和月營收資料,<strong>不構成任何投資建議</strong></li>
+      <li>資料來源:FinMind API(每日自動抓取上市/上櫃/KY 普通股公開數字)</li>
+      <li>資料可能有遲延或缺漏,請以公開資訊觀測站為準</li>
+      <li><strong>本站沒有股價、本益比、股息等交易面資料</strong>,實務投資請搭配券商 App</li>
+      <li><strong>投資有風險,買賣自行判斷,盈虧自負</strong></li>
+    </ul>
+    <p style="margin-top: 20px; font-size: 12px; color: var(--text-muted);">
+      版本歷史:v3.4(2026-08)· 策略模板複選 · 通用產業備註 · 說明頁上線 · v3.3(2026-08)· CL 佔股本比 · 金融股防呆 · v3.0(2026-08)· 5 年資料擴充 · 選股掃描介面
+    </p>
+  </section>
+
+</main>
+
+</body>
+</html>
