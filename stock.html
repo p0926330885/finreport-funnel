@@ -585,6 +585,21 @@ input { font-family: inherit; }
    Funnel — 4-stage (Rev → GP → OP → NP)
    Hybrid: fill-behind + inline badge + leak pill/band
    ========================================================= */
+/* v3.4: 金融股備註提示 */
+.finance-note {
+  padding: 12px 16px; margin-bottom: 12px;
+  background: rgba(240, 180, 100, 0.08);
+  border-left: 3px solid var(--amber);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 13px; line-height: 1.6;
+}
+.finance-note strong {
+  display: block; color: var(--amber);
+  font-size: 13px; margin-bottom: 4px;
+  font-weight: 600;
+}
+
 .funnel {
   display: flex;
   flex-direction: column;
@@ -1459,7 +1474,12 @@ body[data-status="ok"] .status-panel { display: none; }
   <section class="card">
     <div class="card-head">
       <div><h3 class="section-title" tabindex="0" data-tooltip="當季營收如何一路轉化為稅後淨利。每段之間的斜紋帶顯示該層的損耗來源(成本、費用、業外+稅)。合約負債不在漏斗鏈內。">營收轉換漏斗</h3><p id="funnelSub">2026/2Q · 4 段轉化</p></div>
-      <span class="unit" id="funnelUnit">單位：百萬</span>
+      <span class="unit" id="funnelUnit">單位:百萬</span>
+    </div>
+    <!-- v3.4: 金融股備註提示(pipeline 內 industry=finance 時顯示) -->
+    <div class="finance-note" id="financeNote" hidden>
+      <strong>金融業(銀行/保險/證券)損益表結構備註</strong>
+      金融股的損益結構為「利差收入/保費 → 提存準備 → 稅後淨利」,不含「營業成本 → 毛利 → 營業費用 → 營業利益」的三段式概念。漏斗中毛利率、營益率顯示為 0.0% 屬正常現象,非資料異常。建議改看下方「成長率分析」或月營收動能觀察金融股表現。
     </div>
     <div class="funnel" id="funnel"></div>
   </section>
@@ -2560,6 +2580,8 @@ function renderAll() {
   clGrowthTab.hidden = !hasCL;
   if (!hasCL && state.growth === 'cl') state.growth = 'rev';
   if (hasCL) renderClStats();
+  // v3.4: 金融股顯示漏斗備註(說明毛利率 0.0% 屬正常現象)
+  document.getElementById('financeNote').hidden = stock.industry !== 'finance';
   renderFunnel();
   renderGauges();
   renderInsights();
