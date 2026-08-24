@@ -469,18 +469,20 @@ def _build_noi_insight(now, dedup=False):
 # 主入口: insights_v3
 # ============================================================
 
-def insights_v3(quarterly: list[dict], stock_name: str) -> list[dict]:
+def insights_v3(quarterly: list[dict], stock_name: str, has_cl: bool = False) -> list[dict]:
     """
-    產生 4 條 insights.
+    產生 4~5 條 insights.
 
     Args:
-        quarterly: 季度資料 list, 每 item 含 rev/gp/op/np/noi/eps.
+        quarterly: 季度資料 list, 每 item 含 rev/gp/op/np/noi/eps/cl/capitalStock/clRatio.
                    時序為舊->新, 最後一筆為當季.
                    至少需 1 季 (無 YoY 則走 fallback).
         stock_name: 股票名稱, 用於句型.
+        has_cl: 是否有合約負債 (v3.4). True 時追加 s05 敘述當季 CL 與佔股本比.
+                金融股在上游已強制 has_cl=False, 保證不會出現 CL 相關文案.
 
     Returns:
-        4 筆 dict list. 對應前端 s01-s04.
+        4 或 5 筆 dict list. 對應前端 s01-s05.
     """
     if not quarterly:
         # 空資料保底
@@ -528,7 +530,28 @@ def insights_v3(quarterly: list[dict], stock_name: str) -> list[dict]:
     s03 = _build_opgm_insight(now_d, yoy, dedup=dedup_opgm)
     s04 = _build_noi_insight(now_d, dedup=dedup_noi)
 
-    return [s01, s02, s03, s04]
+    result = [s01, s02, s03, s04]
+
+    # v3.4: 訂單能見度 - 合約負債佔股本比 (僅 hasCL=True 追加)
+    # 金融股上游已強制 hasCL=False,保證此區不會出現在金融股 UI
+    if has_cl:
+        last_q = quarterly[-1]
+        cl = last_q.get('cl') or 0
+        cs = last_q.get('capitalStock') or 0
+        cl_ratio = last_q.get('clRatio')
+        if cl > 0 and cs > 0 and cl_ratio is not None:
+            times = cl_ratio / 100
+            text = f"本季合約負債 {cl:,} 百萬元,佔普通股股本 {times:.1f} 倍({cl_ratio:.1f}%),反映訂單池水位。"
+            result.append({
+                'id': 's05',
+                'kind': 'supporting',
+                'tone': 'mint',
+                'mode_code': None,
+                'mode_name': None,
+                'text': text,
+            })
+
+    return result
 # ============================================================
 # End of v3 insights engine
 # ============================================================
@@ -608,7 +631,7 @@ def _bs_pivot(bs_df: pd.DataFrame) -> pd.DataFrame:
         else:
             log.warning("BS field '%s' has NO match in candidates: %s", dst, candidates)
             wide[dst] = 0
-    return wide[["date", "cl"]].sort_values("date").reset_index(drop=True)
+    return wide[["date"] + list(config.BS_FIELD_MAP.keys())].sort_values("date").reset_index(drop=True)
 
 
 # ============================================================
@@ -677,9 +700,15 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
         py = merged.iloc[i - 4].to_dict() if i >= 4 else None
         pq = merged.iloc[i - 1].to_dict() if i >= 1 else None
         noi_val = _n(row["noi"], 1)
+        cl_val = _n(row["cl"]) or 0
+        # v3.4: 普通股股本(百萬)+ 合約負債佔股本比 (%)
+        cs_val = _n(row.get("capitalStock")) or 0
+        cl_ratio = round(cl_val / cs_val * 100, 1) if (cs_val > 0 and cl_val > 0) else None
         full_quarterly.append({
             "q":   _q_label(str(row["date"])[:10]),
-            "cl":  _n(row["cl"]) or 0,
+            "cl":  cl_val,
+            "capitalStock": cs_val,
+            "clRatio": cl_ratio,
             "rev": _n(row["rev"]) or 0,
             "gp":  _n(row["gp"]),
             "op":  _n(row["op"]),
@@ -740,6 +769,11 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
     max_rev = max((x["rev"] for x in quarterly), default=0)
     has_cl = bool(max_rev and (max_cl / max_rev) > config.HAS_CL_THRESHOLD)
 
+    # v3.4 防呆:金融股(銀行/保險/證券)的「合約負債」是保險合約負債之類,
+    # 與訂單池概念完全不同,強制排除 CL 相關 UI 出現。
+    if industry == "finance":
+        has_cl = False
+
     # Monthly: 26 months, [year-month, revenue]
     monthly = []
     if not rev_df.empty:
@@ -750,8 +784,9 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
         monthly = monthly[-config.MONTHLY_HISTORY_MONTHS:]
 
     # v3: 產生自動判讀 (SPEC-insights-v3.1)
+    # v3.4: 傳 has_cl,啟用時追加 s05 CL 佔股本比敘述
     try:
-        insights = insights_v3(quarterly, name)
+        insights = insights_v3(quarterly, name, has_cl=has_cl)
     except Exception as exc:
         log.warning("insights_v3 failed for %s: %s", stock_id, exc)
         insights = []

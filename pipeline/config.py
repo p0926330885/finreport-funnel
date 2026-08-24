@@ -119,7 +119,7 @@ FS_FIELD_MAP = {
     ],
 }
 
-# BS 科目對照 (合約負債-流動)
+# BS 科目對照 (合約負債-流動 + 普通股股本)
 BS_FIELD_MAP = {
     "cl": [
         "CurrentContractLiabilities",    # ← FinMind 真名(Current 在前,v3.3 log 確認)
@@ -128,6 +128,11 @@ BS_FIELD_MAP = {
         "ContractLiabilities",           # 無 -Current 後綴
         "ContractLiability-Current",     # 單數 Liability
         "ContractLiability",             # 單數 + 無後綴
+    ],
+    # v3.4: 普通股股本(用於 CL 佔股本比計算)
+    "capitalStock": [
+        "CapitalStock",     # FinMind 主名(BS log 已確認存在)
+        "ShareCapital",     # fallback
     ],
 }
 
