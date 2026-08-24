@@ -585,8 +585,8 @@ input { font-family: inherit; }
    Funnel — 4-stage (Rev → GP → OP → NP)
    Hybrid: fill-behind + inline badge + leak pill/band
    ========================================================= */
-/* v3.4: 金融股備註提示 */
-.finance-note {
+/* v3.4: 特殊產業備註提示(通用架構) */
+.industry-note {
   padding: 12px 16px; margin-bottom: 12px;
   background: rgba(240, 180, 100, 0.08);
   border-left: 3px solid var(--amber);
@@ -594,7 +594,7 @@ input { font-family: inherit; }
   color: var(--text-dim);
   font-size: 13px; line-height: 1.6;
 }
-.finance-note strong {
+.industry-note .note-title {
   display: block; color: var(--amber);
   font-size: 13px; margin-bottom: 4px;
   font-weight: 600;
@@ -1422,6 +1422,7 @@ body[data-status="ok"] .status-panel { display: none; }
   <nav class="nav-tabs" aria-label="主要導覽">
     <a href="./scanner.html" class="nav-tab" style="text-decoration:none;display:inline-flex;align-items:center;">選股掃描</a>
     <a href="./stock.html" class="nav-tab active" aria-current="page" style="text-decoration:none;display:inline-flex;align-items:center;">個股詳細</a>
+    <a href="./help.html" class="nav-tab" style="text-decoration:none;display:inline-flex;align-items:center;">說明</a>
   </nav>
   <div class="topbar-spacer"></div>
   <div class="search-box"><input type="text" aria-label="搜尋股號或名稱" placeholder="搜尋股號 / 名稱" value="6789"></div>
@@ -1476,10 +1477,10 @@ body[data-status="ok"] .status-panel { display: none; }
       <div><h3 class="section-title" tabindex="0" data-tooltip="當季營收如何一路轉化為稅後淨利。每段之間的斜紋帶顯示該層的損耗來源(成本、費用、業外+稅)。合約負債不在漏斗鏈內。">營收轉換漏斗</h3><p id="funnelSub">2026/2Q · 4 段轉化</p></div>
       <span class="unit" id="funnelUnit">單位:百萬</span>
     </div>
-    <!-- v3.4: 金融股備註提示(pipeline 內 industry=finance 時顯示) -->
-    <div class="finance-note" id="financeNote" hidden>
-      <strong>金融業(銀行/保險/證券)損益表結構備註</strong>
-      金融股的損益結構為「利差收入/保費 → 提存準備 → 稅後淨利」,不含「營業成本 → 毛利 → 營業費用 → 營業利益」的三段式概念。漏斗中毛利率、營益率顯示為 0.0% 屬正常現象,非資料異常。建議改看下方「成長率分析」或月營收動能觀察金融股表現。
+    <!-- v3.4: 特殊產業備註提示(pipeline 內 industry 匹配 industryNotes 時顯示) -->
+    <div class="industry-note" id="industryNote" hidden>
+      <strong class="note-title"></strong>
+      <span class="note-text"></span>
     </div>
     <div class="funnel" id="funnel"></div>
   </section>
@@ -2572,6 +2573,18 @@ function bindControls() {
 /* =========================================================
    Coordinator
    ========================================================= */
+// v3.4: 特殊產業備註表(擴充只需在此加項目)
+const industryNotes = {
+  finance: {
+    title: '金融業(銀行/保險/證券)損益表結構備註',
+    text: '金融股的損益結構為「利差收入/保費 → 提存準備 → 稅後淨利」,不含「營業成本 → 毛利 → 營業費用 → 營業利益」的三段式概念。漏斗中毛利率、營益率顯示為 0.0% 屬正常現象,非資料異常。建議改看下方「成長率分析」或月營收動能觀察金融股表現。'
+  },
+  construction: {
+    title: '建材營造業財報結構備註',
+    text: '營建股採「完工比例法」認列營收,合約負債(工程未認列部分)通常規模龐大,可能達股本數倍。屬產業正常現象,非資料異常。訂單能見度佔股本比可能出現極高數字,建議搭配「成長率分析」和實際完工進度判讀。'
+  },
+  // 未來擴充其他特殊產業(如公用事業、生技)在此加項
+};
 function renderAll() {
   document.getElementById('qPickerLabel').textContent = stock.quarterly[state.qIdx].q;
   document.getElementById('orderPanel').hidden = !hasCL;
@@ -2580,8 +2593,16 @@ function renderAll() {
   clGrowthTab.hidden = !hasCL;
   if (!hasCL && state.growth === 'cl') state.growth = 'rev';
   if (hasCL) renderClStats();
-  // v3.4: 金融股顯示漏斗備註(說明毛利率 0.0% 屬正常現象)
-  document.getElementById('financeNote').hidden = stock.industry !== 'finance';
+  // v3.4: 特殊產業備註(金融/營建 等)· 查 industryNotes 表
+  const noteEl = document.getElementById('industryNote');
+  const note = industryNotes[stock.industry];
+  if (note) {
+    noteEl.querySelector('.note-title').textContent = note.title;
+    noteEl.querySelector('.note-text').textContent = note.text;
+    noteEl.hidden = false;
+  } else {
+    noteEl.hidden = true;
+  }
   renderFunnel();
   renderGauges();
   renderInsights();

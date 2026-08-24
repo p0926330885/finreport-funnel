@@ -393,6 +393,7 @@ body[data-status="ok"] .status-panel { display: none; }
   <nav class="nav-tabs" aria-label="主要導覽">
     <a class="nav-tab active" href="scanner.html" aria-current="page">選股掃描</a>
     <a class="nav-tab" href="stock.html">個股詳細</a>
+    <a class="nav-tab" href="help.html">說明</a>
   </nav>
   <div class="topbar-spacer"></div>
   <div class="search-box"><input type="text" aria-label="搜尋股號或名稱" placeholder="搜尋股號 / 名稱"></div>
@@ -574,11 +575,25 @@ const rangeDefs = {
   clYoY: { label: '合約負債 YoY', min: -100, max: 500, step: 1, unit: '%' },
   // v3.4: 拿掉「能見度月數」slider(指標受營收規模扭曲,失去分級意義)
 };
+// v3.4: 策略模板改複選架構
+// 每個模板獨立 rules function,不再覆蓋 sidebar slider(sidebar/模板兩者最後 AND 交集)
 const templates = {
-  'order-pile-up': { ranges: { clYoY: [30, 500], revYoY: [15, 500] } },
-  'core-stable': { ranges: { om: [8, 100] } },
-  'three-up': { ranges: {} },
-  'momentum-turn': { ranges: {}, gc: true },
+  'order-pile-up': {
+    label: '訂單池累積、認列跟上',
+    rules: stock => stock.hasCL && (stock.clYoY ?? -Infinity) >= 30 && (stock.revYoY ?? -Infinity) >= 15
+  },
+  'core-stable': {
+    label: '本業獲利穩健',
+    rules: stock => (stock.om ?? -Infinity) >= 8 && Math.abs(stock.noiRatio ?? 0) < 25
+  },
+  'three-up': {
+    label: '三率同升',
+    rules: stock => (stock.gmQoQ ?? -1) >= 0 && (stock.omQoQ ?? -1) >= 0 && (stock.nmQoQ ?? -1) >= 0
+  },
+  'momentum-turn': {
+    label: '動能轉正',
+    rules: stock => !!stock.gc
+  },
 };
 const sortableKeys = new Set(['id', 'name', 'industry', 'rev', 'revYoY', 'om', 'score', 'vis']);
 const perPage = 25;
@@ -587,7 +602,7 @@ const THRESHOLD_TO_YI = 50000;
 function defaultState() {
   return {
     ranges: Object.fromEntries(Object.entries(rangeDefs).map(([key, def]) => [key, [def.min, def.max]])),
-    industry: 'all', market: 'all', gc: false, template: null,
+    industry: 'all', market: 'all', gc: false, templates: [], // v3.4: array 支援複選
     sortKey: 'score', sortDir: 'desc', page: 1,
   };
 }
@@ -607,24 +622,14 @@ function normalizeRange(raw, def) {
   const high = clamp(Math.max(...values), def.min, def.max);
   return [low, high];
 }
-function applyTemplate(target, templateId) {
-  const template = templates[templateId];
-  if (!template) return;
-  Object.entries(template.ranges).forEach(([key, value]) => { target.ranges[key] = [...value]; });
-  if (template.gc) target.gc = true;
-  target.template = templateId;
-}
-function clearTemplateEffects(target, templateId) {
-  const template = templates[templateId];
-  if (!template) return;
-  Object.keys(template.ranges).forEach(key => { target.ranges[key] = [rangeDefs[key].min, rangeDefs[key].max]; });
-  if (template.gc) target.gc = false;
-}
+// v3.4: applyTemplate / clearTemplateEffects / templateBaseRange 已移除
+// 模板改為獨立 rules,不覆蓋 sidebar slider,兩者最後 AND 交集
 function parseState() {
   const target = defaultState();
   const params = new URLSearchParams(location.search);
-  const templateId = params.get('template');
-  if (templates[templateId]) applyTemplate(target, templateId);
+  // v3.4: 支援複選 URL ?templates=order-pile-up,three-up · 兼容舊 ?template=xxx 單選
+  const templatesRaw = params.get('templates') || params.get('template') || '';
+  target.templates = templatesRaw.split(',').filter(id => templates[id]);
   Object.entries(rangeDefs).forEach(([key, def]) => {
     const parsed = normalizeRange(params.get(key), def);
     if (parsed) target.ranges[key] = parsed;
@@ -670,22 +675,20 @@ function formatSigned(value) {
   return `${value > 0 ? '+' : '−'}${Math.abs(value).toFixed(1)}%`;
 }
 function activeConditionCount() {
-  return Object.keys(rangeDefs).filter(key => isRangeActive(key)).length + (state.industry !== 'all' ? 1 : 0) + (state.market !== 'all' ? 1 : 0) + (state.gc ? 1 : 0);
-}
-function templateBaseRange(key) {
-  const template = templates[state.template];
-  return template?.ranges[key] || null;
+  return Object.keys(rangeDefs).filter(key => isRangeActive(key)).length + (state.industry !== 'all' ? 1 : 0) + (state.market !== 'all' ? 1 : 0) + (state.gc ? 1 : 0) + state.templates.length;
 }
 function serializeState() {
   const params = new URLSearchParams();
-  if (state.template) params.set('template', state.template);
+  // v3.4: 複選模板序列化(逗號分隔)
+  if (state.templates.length > 0) params.set('templates', state.templates.join(','));
   Object.entries(rangeDefs).forEach(([key, def]) => {
     const value = state.ranges[key];
-    if (!sameRange(value, [def.min, def.max]) && !sameRange(value, templateBaseRange(key) || [NaN, NaN])) params.set(key, value.join(','));
+    if (!sameRange(value, [def.min, def.max])) params.set(key, value.join(','));
   });
   if (state.industry !== 'all') params.set('industry', state.industry);
   if (state.market !== 'all') params.set('market', state.market);
-  if (state.gc && !(state.template === 'momentum-turn')) params.set('gc', '1');
+  // v3.4: sidebar 獨立於模板,gc 現在是獨立條件
+  if (state.gc) params.set('gc', '1');
   if (!(state.sortKey === 'score' && state.sortDir === 'desc')) params.set('sort', `${state.sortKey},${state.sortDir}`);
   if (state.page > 1) params.set('page', String(state.page));
   return params;
@@ -715,8 +718,11 @@ function filterStocks() {
       if (value == null || value < state.ranges[key][0] || value > state.ranges[key][1]) return false;
     }
     if (state.gc && !stock.gc) return false;
-    if (state.template === 'core-stable' && Math.abs(stock.noiRatio) >= 25) return false;
-    if (state.template === 'three-up' && !(stock.gmQoQ >= 0 && stock.omQoQ >= 0 && stock.nmQoQ >= 0)) return false;
+    // v3.4: 複選模板 AND 交集 · 每個選中的模板 rules 都必須 pass
+    for (const templateId of state.templates) {
+      const tpl = templates[templateId];
+      if (tpl && !tpl.rules(stock)) return false;
+    }
     return true;
   });
   rows.sort((a, b) => {
@@ -756,7 +762,8 @@ function renderControls() {
     if (low > midPoint) { minR.style.zIndex = '3'; maxR.style.zIndex = '2'; }
     else { minR.style.zIndex = ''; maxR.style.zIndex = ''; }
   });
-  document.querySelectorAll('.template-chip').forEach(chip => chip.classList.toggle('active', chip.dataset.template === state.template));
+  // v3.4: 複選 · chip active 判斷 chip 是否在 templates 陣列內
+  document.querySelectorAll('.template-chip').forEach(chip => chip.classList.toggle('active', state.templates.includes(chip.dataset.template)));
   const count = activeConditionCount();
   document.getElementById('activeCount').textContent = `已啟用 ${count} 個條件`;
   document.getElementById('mobileFilterButton').textContent = `篩選 (${count})`;
@@ -839,7 +846,7 @@ function bindControls() {
       if (input.dataset.bound === 'min' && low > high) low = high;
       if (input.dataset.bound === 'max' && high < low) high = low;
       state.ranges[key] = [low, high];
-      state.template = null;
+      // v3.4: 拖動 slider 不再 clear template (Q2 Z 獨立)
       renderControls();
       applyRangeChange();
     }));
@@ -861,7 +868,7 @@ function bindControls() {
         if (input.dataset.bound === 'min-num' && low > high) low = high;
         if (input.dataset.bound === 'max-num' && high < low) high = low;
         state.ranges[key] = [low, high];
-        state.template = null;
+        // v3.4: 打字 input 不再 clear template
         renderControls();
         applyRangeChange();
       });
@@ -874,7 +881,7 @@ function bindControls() {
         high = clamp(high, def.min, def.max);
         if (low > high) low = high;
         state.ranges[key] = [low, high];
-        state.template = null;
+        // v3.4: blur/Enter 不再 clear template
         minN().classList.remove('out-of-range');
         maxN().classList.remove('out-of-range');
         renderControls();
@@ -895,15 +902,19 @@ function bindControls() {
   document.addEventListener('pointerup', _stopDrag);
   document.addEventListener('pointercancel', _stopDrag);
 
-  document.getElementById('industrySelect').addEventListener('change', event => { state.industry = event.target.value; state.template = null; state.page = 1; renderAll(); syncUrl('replace'); });
-  document.getElementById('marketSelect').addEventListener('change', event => { state.market = event.target.value; state.template = null; state.page = 1; renderAll(); syncUrl('replace'); });
-  document.getElementById('gcToggle').addEventListener('change', event => { state.gc = event.target.checked; state.template = null; state.page = 1; renderAll(); syncUrl('replace'); });
+  // v3.4: industry/market/gc 變更不再 clear template (Q2 Z 獨立)
+  document.getElementById('industrySelect').addEventListener('change', event => { state.industry = event.target.value; state.page = 1; renderAll(); syncUrl('replace'); });
+  document.getElementById('marketSelect').addEventListener('change', event => { state.market = event.target.value; state.page = 1; renderAll(); syncUrl('replace'); });
+  document.getElementById('gcToggle').addEventListener('change', event => { state.gc = event.target.checked; state.page = 1; renderAll(); syncUrl('replace'); });
   document.getElementById('templateRow').addEventListener('click', event => {
     const chip = event.target.closest('[data-template]');
     if (!chip) return;
     const selected = chip.dataset.template;
-    if (state.template === selected) { clearTemplateEffects(state, selected); state.template = null; }
-    else { if (state.template) clearTemplateEffects(state, state.template); applyTemplate(state, selected); }
+    if (!templates[selected]) return;
+    // v3.4: toggle · 已選則移除,未選則加入(Q1 A · AND · Q3 A · pill 高亮)
+    const idx = state.templates.indexOf(selected);
+    if (idx >= 0) state.templates.splice(idx, 1);
+    else state.templates.push(selected);
     state.page = 1; renderAll(); syncUrl('push');
   });
   document.addEventListener('click', event => {
