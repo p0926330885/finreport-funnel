@@ -475,11 +475,7 @@ body[data-status="ok"] .status-panel { display: none; }
           <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="合約負債年增率最低值" inputmode="numeric"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="合約負債年增率最高值" inputmode="numeric"><span class="range-unit">%</span></div>
           <div class="range-stack"><input type="range" data-bound="min" aria-label="合約負債年增率最低值"><input type="range" data-bound="max" aria-label="合約負債年增率最高值"></div>
         </div>
-        <div class="range-control" data-range="vis" data-tooltip="合約負債 ÷ 該季 3 個月平均月營收。啟用此條件會自動排除無合約負債的股票。">
-          <span class="range-label">能見度月數</span>
-          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="能見度最低月數" inputmode="decimal"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="能見度最高月數" inputmode="decimal"><span class="range-unit">個月</span></div>
-          <div class="range-stack"><input type="range" data-bound="min" aria-label="能見度最低月數"><input type="range" data-bound="max" aria-label="能見度最高月數"></div>
-        </div>
+        <!-- v3.4: 拿掉「能見度月數」slider · 指標受營收規模扭曲,失去分級意義 -->
       </section>
 
       <section class="filter-section">
@@ -521,7 +517,7 @@ body[data-status="ok"] .status-panel { display: none; }
         <div class="empty-state" id="emptyState">
           <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
           <h3>無符合條件的股票</h3>
-          <p>試試放寬「毛利率」或「能見度月數」條件<br>或點「清除全部」重新開始</p>
+          <p>試試放寬「毛利率」或「合約負債 YoY」條件<br>或點「清除全部」重新開始</p>
           <button class="btn" data-clear data-tooltip="重置所有篩選條件與模板到初始狀態。">清除全部</button>
         </div>
         <nav class="pager" id="pager" aria-label="結果分頁"></nav>
@@ -576,7 +572,7 @@ const rangeDefs = {
   nm: { label: '淨利率', min: -30, max: 100, step: 1, unit: '%' },
   revYoY: { label: '營收 YoY', min: -100, max: 500, step: 1, unit: '%' },
   clYoY: { label: '合約負債 YoY', min: -100, max: 500, step: 1, unit: '%' },
-  vis: { label: '能見度月數', min: 0, max: 24, step: 0.1, unit: ' 個月' },
+  // v3.4: 拿掉「能見度月數」slider(指標受營收規模扭曲,失去分級意義)
 };
 const templates = {
   'order-pile-up': { ranges: { clYoY: [30, 500], revYoY: [15, 500] } },
@@ -773,7 +769,7 @@ const columnDefs = [
   { key: 'revYoY', label: '營收 YoY', tip: '相較去年同期營收的變化百分比。>15% 為強勁成長。' },
   { key: 'om', label: '營益率', tip: '營業利益 ÷ 營收。反映本業獲利能力。≥8% 綠 / 3–8% 黃 / <3% 紅。' },
   { key: 'score', label: '健康度總分', tip: '4 核心指標(毛利率、營益率、淨利率、業外占淨利)綠 2 分 / 黃 1 分 / 紅 0 分加總。0–8 分。≥6 綠 / 3–5.9 黃 / <3 紅。' },
-  { key: 'vis', label: '能見度', tip: '合約負債 ÷ 該季 3 個月平均月營收。無合約負債的股票顯示 —。' },
+  // v3.4: 拿掉「能見度」欄
 ];
 function sortMark(key) { return state.sortKey === key ? (state.sortDir === 'asc' ? '↑' : '↓') : ''; }
 function navigateToStock(id, event) {
@@ -796,12 +792,12 @@ function renderResults() {
   document.getElementById('resultsBody').innerHTML = rows.map(stock => `<tr data-stock-id="${stock.id}" tabindex="0" aria-label="查看 ${stock.id} ${stock.name}">
     <td class="stock-id">${stock.id}</td><td>${stock.name}</td><td class="stock-industry">${industries[stock.industry]}</td>
     <td>${formatMoney(stock.rev, revUnit)}</td><td class="${stock.revYoY > 0 ? 'value-positive' : stock.revYoY < 0 ? 'value-negative' : ''}">${formatSigned(stock.revYoY)}</td>
-    <td>${stock.om == null ? '—' : stock.om.toFixed(1) + '%'}</td><td><span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span></td><td>${stock.vis == null ? '—' : stock.vis.toFixed(1)}</td>
+    <td>${stock.om == null ? '—' : stock.om.toFixed(1) + '%'}</td><td><span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span></td>
   </tr>`).join('');
   document.getElementById('mobileResults').innerHTML = rows.map(stock => `<a class="stock-card" href="stock.html?id=${stock.id}">
     <div class="stock-card-head"><span class="stock-card-title">${stock.id} · ${stock.name}</span><span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span></div>
     <div class="stock-card-industry">${industries[stock.industry]}</div>
-    <div class="stock-card-grid"><span>當季營收<b>${formatMoney(stock.rev, revUnit)} ${revUnit.unit}</b></span><span>YoY<b class="${stock.revYoY > 0 ? 'value-positive' : stock.revYoY < 0 ? 'value-negative' : ''}">${formatSigned(stock.revYoY)}</b></span><span>營益率<b>${stock.om == null ? '—' : stock.om.toFixed(1) + '%'}</b></span><span>能見度<b>${stock.vis == null ? '—' : `${stock.vis.toFixed(1)} 月`}</b></span></div>
+    <div class="stock-card-grid"><span>當季營收<b>${formatMoney(stock.rev, revUnit)} ${revUnit.unit}</b></span><span>YoY<b class="${stock.revYoY > 0 ? 'value-positive' : stock.revYoY < 0 ? 'value-negative' : ''}">${formatSigned(stock.revYoY)}</b></span><span>營益率<b>${stock.om == null ? '—' : stock.om.toFixed(1) + '%'}</b></span></div>
   </a>`).join('');
   const empty = filteredList.length === 0;
   document.getElementById('emptyState').classList.toggle('show', empty);
