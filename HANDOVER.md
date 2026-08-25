@@ -283,12 +283,22 @@ def is_common_stock(stock_id, industry_category, stock_name, stock_type):
       "nmQoQ": 4.5,
       "hasCL": false,      // 前端根據此決定顯示訂單能見度區塊
       "gc": true,          // 3MA vs 12MA 近 1 月黃金交叉
+      "clRatio": 78.9,     // v3.4 P1 · 合約負債佔股本比 % · 給 clRatio slider + 動態欄位使用 · 無 CL 時為 null
+      "opYoY": 340.7,      // v3.4 P2 · 營業利益 YoY % · 給「營運槓桿釋放」模板 + 動態欄位「營益 YoY」使用
+      "gmYoY": 11.7,       // v3.4 P2 · 毛利率 YoY 差值 (pp) · 給「營運槓桿釋放」模板判定
       // score 由前端 healthScore() 動態計算,不寫入 JSON
     },
     ... // 全市場 ~1,700 筆
   ]
 }
 ```
+
+**⚠️ v3.4 三個新欄位覆蓋率(隨 backfill 進度變化)**:
+- `clRatio`: 只在 `hasCL=true` 時有值 · 全市場約 25-30% 有值 · 個股 JSON `quarterly[-1].clRatio` 抽取
+- `opYoY`: 大部分股票有值(需要 4 季以上歷史)· 全市場約 95-98% 有值 · 個股 JSON `quarterly[-1].opYoY` 抽取
+- `gmYoY`: 同上 · 需 `build_scanner_row` 內即時計算(當季 gm - 去年同期 gm 的 pp 差值)· 全市場約 95-98% 有值
+
+**新上市 < 1 年的股票**(如 7835 永悅健康-創、8497 格威傳媒):`opYoY` 和 `gmYoY` 會是 null(缺去年同期資料),不算 bug。P2「營運槓桿釋放」模板已加 null 嚴格排除。
 
 ### 4-3 · Meta · `data/meta.json`
 
@@ -385,9 +395,21 @@ if (industryNotes[stock.industry]) {
 
 | Workflow | 觸發 | 用途 | 耗時 |
 |---|---|---|---|
-| `backfill.yml` | 手動 workflow_dispatch | dev / 緊急修復 | 8 分鐘 (20 檔) |
+| `backfill.yml` | 手動 workflow_dispatch | dev / 指定股票 rebuild · 支援 `stocks` 逗號分隔輸入(cache hit) | 5-10 分鐘 (20 檔 cache hit) |
 | `backfill-scheduled.yml` | Cron `30 19 * * *` (UTC) = 03:30 TPE | Phase 2: 7 批接力,每天跑一批 | 90-120 分鐘/批 |
 | `daily-build.yml` | Cron `0 14 * * *` (UTC) = 22:00 TPE | 日常增量更新(cache 生效) | 30-60 分鐘 |
+
+**`backfill.yml` v3.4 升級用法**(2026-08-25):
+
+```
+# stocks input 有值 → 走 --daily --stock (cache hit,秒完成,不吃 API)
+   輸入範例:2330,2454,3037   → 只跑這 3 檔
+
+# stocks input 留空 → 走 --backfill (全市場強制刷新,90 分可能 timeout)
+
+# 已修:build.py --stock 也走 _merge_scanner_index upsert
+#       (之前 --stock 20 檔會把 index 從 312 縮成 20 檔,現在會 upsert 保留其他股票)
+```
 
 ### 6-2 · 7 批接力機制
 
@@ -511,7 +533,7 @@ GitHub Actions → Backfill (Scheduled 7-Batch) → Run workflow → 輸入 batc
 | v3.1 | 2026-08 | 手機 UI + 雙 range slider |
 | v3.2 | 2026-08 | 自動判讀 v3(10 模式)|
 | v3.3 | 2026-08 | CurrentContractLiabilities 抓取修正 · CL tab 隱藏 bug 修 |
-| v3.4 | 2026-08 | **Phase 2**: CL 佔股本比 · 通用產業備註 · 策略模板複選 · 說明頁 · **全市場 1,700 檔擴充** |
+| v3.4 | 2026-08 | **Phase 2 + P0+P1+P2 + 月營收動能 truth table**:全市場 1,700 檔擴充 · P0 表格固定 8 欄 + 動態 4 欄機制 · P1 clRatio slider (0-200%) · P2 「營運槓桿釋放」策略模板(第 5 個 pill,含 opYoY 動態欄自動排序)· 月營收動能圖交叉點 truth table 邏輯 · 手機端 header + 2x2 grid + footer chip 升級 · Backfill workflow 工具化(stocks 參數)|
 
 ### 7-2 · 關鍵設計決策
 
@@ -535,6 +557,37 @@ GitHub Actions → Backfill (Scheduled 7-Batch) → Run workflow → 輸入 batc
 - 未強制時前端會顯示 CL 71,359 億 / rev 725 億 = 98 倍的荒謬數字
 - 詳見 §5-1
 
+**為什麼 scanner 表格改成「固定 8 欄 + 動態 4 欄」機制?(v3.4 P0)**
+- 舊版所有欄位固定顯示,「調了 slider 卻看不到對應數據」的痛點
+- 固定 8 欄(股號/名稱/產業/當季營收/營收 YoY/毛利率/營益率/健康度總分)= 體質輪廓
+- 動態候選 5 欄(淨利率 / CL YoY / CL/股本比 / 動能狀態 / 營益 YoY)依 slider 或模板觸發右側自動展開
+- 欄位去重:模板 + slider 同時觸發同一欄只渲染 1 欄
+- 手機版同步升級為 header + 2x2 grid + footer dynamic chip 結構
+
+**為什麼 clRatio slider 上限 200% 代表「≥200%」而不是絕對上限?(v3.4 P1)**
+- 建材/設備/工程業合約負債佔股本比常見 300-500%(如某些建設股)
+- 若寫死 500% 為上限,slider 拖曳時 UI 難用(拖 100% 只走 20% 距離)
+- 折衷:0-200% 涵蓋 95% 標的 · 上限 = 200 特殊解讀為「≥200 無上限」
+- 下限 > 0% 時隱含排除 hasCL=false(避免無 CL 標的當作 0% 命中)
+
+**為什麼「營運槓桿釋放」模板無定值門檻?(v3.4 P2)**
+- 純粹狀態判定:revYoY > 0 · 且 opYoY > revYoY · 且 gmYoY ≥ 0(pp)· 且當季 op > 0
+- 強度差別交給 sidebar slider 主動加強(想找爆發最猛的自己拉「營收 YoY > 30」)
+- 點模板時自動用 opYoY 降序排序,強者浮到最前(P2 補強)
+- 動態展開「營益 YoY (%)」欄讓使用者一眼比較強度
+
+**為什麼月營收動能圖交叉點用 truth table 動態選對?(v3.4)**
+- 舊邏輯:交叉點寫死在 3MA vs 12MA
+- 使用者關掉 12MA 只留 3MA,3MA 上還有孤立圓點在跳 → 誤導「3MA 自己金叉自己」
+- 新邏輯 truth table:
+  - 3=off → 不畫(3MA 是基準,缺 3 就沒交叉可談)
+  - 3=on, 6=off, 12=off → 不畫(單條無對照)
+  - 3=on, 6=off, 12=on → 3 vs 12(標準長期動能對照)
+  - 3=on, 6=on, 12=off → 3 vs 6(短期節奏)
+  - 3=on, 6=on, 12=on → 只畫 3 vs 12(12 優先,避免視覺重疊)
+- 預設 `{ 3: true, 6: false, 12: true }`(短長對照最標準)
+- 圓點視覺:半徑 3.5px + 深色邊框(#0d0f14) 1.5px + hover 放大到 8px
+
 ### 7-3 · 部署歷程
 
 實際部署到 production 的時間點記錄,和 §7-1(特性完成日)分開追蹤,方便 debug 時精準定位「什麼時候切換到 XX 行為」。
@@ -546,6 +599,49 @@ GitHub Actions → Backfill (Scheduled 7-Batch) → Run workflow → 輸入 batc
 | 2026-08-25 22:00 | 首次 Phase 2 版 daily-build 執行(見下方過渡狀態) | 見 GitHub Actions |
 | 2026-08-26 03:30 | 首次 scheduled-backfill batch 執行 · batch = 238 % 7 = **0**(stocks[0:243]) | 見 GitHub Actions |
 | 2026-09-01 03:30 | 最後一批(batch 6)執行 · `scanner_index.json` 累積為完整全市場 ~1,700 檔 | 見 GitHub Actions |
+
+### 7-4 · 已知邊界情境
+
+未來 debug 時常遇到的「非 bug 但看似奇怪」的狀況,先整理避免重複挖坑:
+
+**新上市未滿 1 年的股票缺 opYoY / gmYoY**
+- 症狀:某些股票(如 7835 永悅健康-創、8497 格威傳媒)在 scanner_index 內 `opYoY: null` `gmYoY: null`
+- 原因:需要「去年同期」對照,新上市未滿 1 年沒歷史資料
+- 影響:P2 營運槓桿釋放模板永遠排除這些股(rules 有 null 嚴格排除,正確行為)
+- 不用修
+
+**scheduled-backfill fail=7 是預期**
+- Batch 6 內約有 7 檔股票(集中在興櫃或剛下市股)API 抓不到完整資料
+- Build.py 已修 return 0,fail=7 不會導致整批 skip commit
+- 若某天 fail 突然變 50+,才需要追(可能是 FinMind API 大範圍故障)
+
+**scanner_index 有時包含舊格式股票**
+- 當 backfill 只跑部分 batch,現有 scanner_index 內未被覆蓋的股票會保留舊格式欄位
+- 例如 DEMO 20 檔可能沒 `clRatio / opYoY / gmYoY`(如果只跑 batch 6 沒跑 batch 0)
+- P1 P2 filter 會排除這些「缺欄位」的股票,顯示上表格欄位是「—」
+- 隨著 7 批全跑完,所有股票逐漸統一新格式
+
+**backdrop-filter 在 iOS Safari 特殊 bug**
+- `.topbar` 有 `backdrop-filter: blur()` + `position: sticky` 時,iOS Safari 會把 backdrop rendering surface 擴展到整個 viewport,截斷下方 fixed 元素(即使 z-index:10000)
+- 症狀:手機端個股頁搜尋 dropdown 被下方卡片遮住
+- 修法:mobile @media 內 `.topbar` 加 `backdrop-filter: none` + 純不透明背景
+- 桌面版保留 backdrop-filter 效果不變
+
+**手機端 daily-build.yml 首週 timeout 是預期**
+- 首週 5-7 天 cache 沒滿,daily-build 22:00 必然 timeout
+- Timeout 時不 commit,不影響資料完整性
+- 明細見 §7-3 過渡狀態說明
+
+**新股 monthly 資料不足以算 12MA(如三商餐飲 7705)**
+- 症狀:某股票 monthly 資料只有 23 個月(如三商 2024-10 才有 monthly),12MA 無法從最左側開始畫
+- 原因:興櫃時期不強制公布月營收,轉上市前 1 個月才開始有 monthly · 這是資料源本質,非 bug
+- 財務嚴謹處理原則(v3.4 定案):
+  - `movingAverage` 函式前 N-1 位置嚴格 return null,不 padding 假值
+  - `crosses` 函式雙線都需有值才判定,不誤產交叉點
+  - `ma-toggle` 按鈕當 `series.length < length` 時 disable + tooltip 顯示「資料不足 · 需 N 個月」
+  - `chart-annot` 內加 `data-range-chip`,當 `series.length < 60` 時顯示「📅 資料範圍:YYYY-MM ~ YYYY-MM(N 個月)」讓使用者立刻理解
+- 相關檔案:`stock.html` 內的 `renderMaChart()`, `movingAverage()`, `crosses()`
+- 案例:7705 三商餐飲(2023-12 登錄興櫃,2024-11 轉上市,monthly 23 筆 vs quarterly 13 筆)
 
 **⚠️ 已知過渡狀態(2026-08-25 ~ 08-31 · 約 6-7 天)**:
 
@@ -560,6 +656,36 @@ GitHub Actions → Backfill (Scheduled 7-Batch) → Run workflow → 輸入 batc
 首週 daily-build failure **是預期行為,不用手動介入**。若 2026-09-03 之後 daily-build 仍持續 timeout,才需要 debug。
 
 **加速選項(選用,不做也沒差)**:若不想看 6-7 天紅色 X,可在 `pipeline/config.py` 臨時把 `USE_FULL_UNIVERSE = False`,daily-build 會 fallback 到 `DEMO_UNIVERSE`(20 檔),立刻可用。等 backfill 跑完 7 批後(2026-09-02)再切回 `True`。
+
+---
+
+#### 2026-08-25(週二 · 全日大整修 · 13 個 commit)
+
+早上 8:36 診斷 batch 6 fail=7 開始,一路修到深夜手機端搜尋 dropdown bug,是 v3.4 的**實質內容大定案日**。以下依時序整理:
+
+| 時段 | 類別 | commit 摘要 |
+|---|---|---|
+| 09:00-09:30 | 🔴 Bug fix | `pipeline/build.py return 0`:原本 fail>0 就 return 2 導致 scheduled-backfill fail=7/301 整批 skip commit(294 檔資料被丟)· 改為 return 0 讓 workflow 繼續 commit |
+| 09:00-09:30 | 🔴 Bug fix | `stock.html` 季度資料成長率 view 依 `hasCL` 過濾 clYoY 欄位(修 renderTable 加 filter)|
+| 10:00-11:00 | ✨ Feature | `scanner.html v3.4 P0+P1+P2`:表格固定 8 欄 + 動態 4 欄候選 · sidebar 加 clRatio dual slider (0-200%) · 策略模板加第 5 個 pill「營運槓桿釋放」· 手機版 header + 2x2 grid + footer chip |
+| 12:00-13:00 | 🔴 Bug fix | `pipeline/transform.py build_scanner_row`:補齊 `clRatio` + `opYoY` + `gmYoY` 三欄(之前 scanner_index 缺這 3 欄,P1/P2 filter 全 null 被排除 → 0 檔)|
+| 13:00-13:30 | ✨ Tool | `.github/workflows/backfill.yml v3.4`:加 `stocks` 逗號分隔輸入 · 有值走 `--daily --stock`(cache hit 秒完成)· 無值保留 `--backfill` 全市場舊行為 · 加 concurrency group + job summary |
+| 13:30-14:00 | 🔴 Bug fix | `pipeline/build.py --stock upsert`:upsert 條件從 `batch is not None` 擴展為 `batch is not None or stock_ids`,修「--stock 20 檔會把整份 scanner_index 從 312 縮成 20 檔」的邏輯 bug |
+| 14:30-15:00 | ✨ Feature | `scanner.html P2 補強`:dynamicColumnCandidates 加第 5 個 opYoY 動態欄 · 點「營運槓桿釋放」pill 時自動設 sortKey=opYoY, sortDir=desc(強者浮到最前)|
+| 15:00-15:30 | ✨ Feature | `stock.html` 月營收動能圖:交叉點 truth table 動態選對(3+12 標準 / 3+6 短期 / 三線全開仍 3 vs 12 / 缺 3MA 不畫)· 圓點視覺 3 段優化(3.5px + 深色邊框 + hover 8px)· 預設 6MA 關閉 |
+| 15:30-16:00 | 📚 Docs | `help.html v3.4 大同步`:§4 加 clRatio slider 說明 · §4 策略模板 4→5 · §4 結果表大改為固定+動態機制 · §8 開頭 4→5 · §8 隱含規則表 4→5 · §10 Q9 手機版新卡片結構具體化 · §9 新增實例 4「營運槓桿釋放找爆發成長股」· 板塊 6 加 truth table 說明 · 名詞速查更新黃金交叉定義 |
+| 16:30-17:00 | 🎨 UX | `stock.html` 漏斗圖對比度升級:.tier-sub / .leak-note / .tier-val .u 從 --text-dim (5.4:1) 升到 rgba(232,236,242,0.72) (~10:1)· 字級 10-10.5px 加大到 11-11.5px |
+| 17:00-17:30 | 🐛 Bug fix | `stock.html` 手機端搜尋 dropdown 被遮 bug:iOS Safari sticky+backdrop-filter 造成 fixed 子元素被截斷 · 三層防禦:mobile @media disable topbar backdrop-filter + dropdown 加 isolation:isolate + 保留 fixed z-index:10000 |
+
+**當日累積成果**:
+- ✅ 3 個新前端功能(P0 動態欄 · P1 clRatio · P2 opLev + 自動排序)
+- ✅ 4 個 pipeline/workflow bug 修復(return code · --stock upsert · scanner_index 補 3 欄 · dropdown 遮蔽)
+- ✅ 2 個 UX 優化(月營收圓點 · 漏斗對比度)
+- ✅ 1 個 workflow 工具化(backfill.yml stocks 參數)
+- ✅ 說明書 7 段同步 + 1 段新增(實例 4)
+- ✅ 月營收動能圖交叉點 truth table 邏輯確立
+
+**scanner_index 演變**:8/25 早上 20 檔 → 09:30 搶救 batch 6 = 312 檔 → 22:XX --stock bug 縮成 20 檔 → 修 build.py + 再跑 batch 6 = 312 檔恢復。
 
 ---
 
