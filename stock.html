@@ -2338,9 +2338,26 @@ function crosses(shortLine, longLine) {
 }
 
 function renderMaChart() {
-  const series = aggregateMonthly(state.period);
-  const values = series.map(item => item.value);
-  const averages = { 3: movingAverage(values, 3), 6: movingAverage(values, 6), 12: movingAverage(values, 12) };
+  // v3.4: Backward extension 暖機期實作
+  //   - Pipeline 抓 71 個月 (60 顯示 + 11 暖機,見 config.MONTHLY_HISTORY_MONTHS)
+  //   - 均線用完整 71 個月算(前 11 個月的值不顯示,只用於讓 12MA 從第 1 個顯示月份起就有值)
+  //   - 圖表 x 軸只顯示後 60 個月(fullSeries.slice(displayStart))
+  //   - 只在 M 頻率 + monthly ≥ 71 時啟用;Q/Y 或資料不足時 fallback 現有邏輯(displayStart=0)
+  const DISPLAY_MONTHS = 60;
+  const WARMUP_MONTHS = 11;
+  const FULL_MONTHS = DISPLAY_MONTHS + WARMUP_MONTHS;   // 71
+
+  const fullSeries = aggregateMonthly(state.period);
+  const useWarmup = state.period === 'M' && fullSeries.length >= FULL_MONTHS;
+  const displayStart = useWarmup ? fullSeries.length - DISPLAY_MONTHS : 0;
+  const series = fullSeries.slice(displayStart);   // 用於圖表顯示的 series
+  const fullValues = fullSeries.map(item => item.value);   // 用於均線計算的完整值(含暖機期)
+  const values = series.map(item => item.value);           // 用於 bar 顯示的顯示範圍值
+
+  // 均線用 fullValues 算完整 (含暖機期),再 slice 到 displayStart 之後對齊圖表 x 軸
+  const fullAverages = { 3: movingAverage(fullValues, 3), 6: movingAverage(fullValues, 6), 12: movingAverage(fullValues, 12) };
+  const averages = { 3: fullAverages[3].slice(displayStart), 6: fullAverages[6].slice(displayStart), 12: fullAverages[12].slice(displayStart) };
+
   const unitInfo = pickUnit(maxAbs(values));
   const scaledValues = values.map(value => value / unitInfo.divisor);
   const scaledAverages = Object.fromEntries(Object.entries(averages).map(([length, line]) => [length, line.map(value => value == null ? null : value / unitInfo.divisor)]));
@@ -2349,7 +2366,8 @@ function renderMaChart() {
   document.querySelectorAll('#maLegends .ma-toggle').forEach(button => {
     const length = Number(button.dataset.ma);
     // v3.4: 資料不足以算 window 時也 disable(新股 monthly 少於 12 個月時 12MA disable + tooltip 提示)
-    const insufficientData = series.length < length;
+    // 用 fullValues.length (含暖機期,若有) 判斷,而非 series.length (顯示範圍)
+    const insufficientData = fullValues.length < length;
     const disabled = (state.period === 'Y' && length !== 3) || insufficientData;
     button.disabled = disabled;
     button.classList.toggle('hidden-line', !state.maVisible[length]);

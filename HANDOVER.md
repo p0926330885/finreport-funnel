@@ -643,6 +643,20 @@ GitHub Actions → Backfill (Scheduled 7-Batch) → Run workflow → 輸入 batc
 - 相關檔案:`stock.html` 內的 `renderMaChart()`, `movingAverage()`, `crosses()`
 - 案例:7705 三商餐飲(2023-12 登錄興櫃,2024-11 轉上市,monthly 23 筆 vs quarterly 13 筆)
 
+**均線暖機期機制(v3.4 · Backward Extension)**
+- 動機:老公司(如 2308 台達電)明明有更早的月營收,但 stock JSON 只存 60 個月,導致 3MA 前 2 個月 null、12MA 前 11 個月 null,均線視覺上「從 1/6 處才開始」
+- 解法:pipeline 抓 71 個月(60 顯示 + 11 暖機期)· `config.MONTHLY_HISTORY_MONTHS = 71`
+- 前端 `stock.html renderMaChart` 邏輯:
+  - `useWarmup = state.period === 'M' && fullSeries.length >= 71`(M 頻率 + 資料足夠時啟用)
+  - `displayStart = fullSeries.length - 60`(取後 60 個月顯示)
+  - 均線用 `fullValues` (含暖機期) 算,再 `slice(displayStart)` 對齊圖表 x 軸
+  - 效果:台達電 3MA 和 12MA 都從第 1 個顯示月份(2021-09)就有值
+- Fallback 邏輯:
+  - 新股 monthly < 71(如三商 23 筆)→ `useWarmup=false`,全部顯示 · 保持嚴格 null 邏輯
+  - Q/Y 頻率 → 不啟用暖機(不需要,月營收季/年聚合後才 20 筆左右)
+- 相關 commit:2026-08-25 深夜 · pipeline/config.py 60→71 · stock.html 加 displayStart 邏輯
+- 生效方式:改 config 後**不需要手動 backfill**,自然隨明晚 03:30 batch 0 排程用新 config 產出 stock JSON · 一週後全市場 stock JSON 都會有 71 筆 monthly
+
 **⚠️ 已知過渡狀態(2026-08-25 ~ 08-31 · 約 6-7 天)**:
 
 `daily-build.yml` 每晚 22:00 會嘗試處理全部 ~1,700 檔(因為 `USE_FULL_UNIVERSE=True` 且未帶 `--batch`)。FinMind 免費層 500 req/hr × 每檔 3 request → 90 分鐘上限 = ~245 檔 API 呼叫 → **cache 覆蓋率必須 > 85% (~1,455 檔)daily-build 才可能在 90 分內完成**。快取由 `backfill-scheduled.yml` 每天 03:30 分批填充(每批 ~243 檔 · 7 天填滿)+ daily-build 每晚失敗前累積的 partial cache 共同貢獻。
