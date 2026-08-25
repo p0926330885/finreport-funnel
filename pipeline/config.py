@@ -36,7 +36,10 @@ DATASETS = {
 HAS_CL_THRESHOLD = 0.15                  # v2.2 §4.2: max(近8Q CL) / max(近8Q rev) > 0.15
 QUARTERLY_HISTORY_QUARTERS = 20          # Detail 頁 20 季 (5 年)
 QUARTERLY_YOY_BUFFER = 4                 # 額外拉 4 季,用於算最終 20 季前 4 季的 YoY (不出現在輸出)
-MONTHLY_HISTORY_MONTHS = 60              # 60 for 5-year history (still supports 12MA)
+MONTHLY_HISTORY_MONTHS = 71              # v3.4: 60 顯示視窗 + 11 暖機期
+                                         # 前端 stock.html slice 掉前 11 個月不顯示,但用於均線計算
+                                         # 讓 12MA 從第 1 個顯示月份就有值(如台達電 3MA 從 2021-09 起,不再有前 2 月留白)
+                                         # 對新股(如 7705 三商 · monthly < 71)自動 fallback 現有邏輯
 GOLDEN_CROSS_LOOKBACK_DAYS = 30          # Scanner §7.6
 
 THRESHOLD_TO_YI = 50000                  # v2.2 §23 (百萬 -> 億 切換閾值)
