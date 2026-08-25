@@ -175,10 +175,10 @@ input { font-family: inherit; }
 }
 /* v3.4: 智慧搜尋 dropdown(和 scanner 一致) */
 .search-dropdown {
-  /* v3.4: 徹底修法 · absolute→fixed + append 到 body,跳出 topbar 的 backdrop-filter stacking context
-   * 之前的 z-index 100→999 修不好,因為 topbar 的 backdrop-filter: blur(16px) 建立獨立 stacking context 且形成 containing block,
-   * z-index 值多高都突破不了。改成 fixed + 掛 body 才能真正浮到最上層 */
+  /* v3.4: 三層防禦 · (1) fixed + append body 跳出 topbar stacking context (2) isolation 建立獨立 context 阻絕外層 blend (3) z-index 10000 保險
+   * 手機端 iOS Safari backdrop-filter bug 已在 @media 內 disable topbar filter,這裡是備援 */
   position: fixed; z-index: 10000;
+  isolation: isolate;
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   box-shadow: 0 6px 18px rgba(0,0,0,0.45);
   max-height: 320px; overflow-y: auto;
@@ -263,6 +263,10 @@ input { font-family: inherit; }
     min-height: 60px;
     padding: 8px 12px;
     align-items: center;
+    /* v3.4 fix: iOS Safari backdrop-filter 在 sticky 元件內會截斷下方 fixed 元素(search dropdown 被下方卡片遮住)· mobile 端關掉,改用純不透明背景,視覺差異幾乎無感 */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--bg);
   }
   .brand         { grid-area: brand; min-width: 0; }
   .brand-text    { font-size: 13px; }
