@@ -1,20 +1,41 @@
 name: Backfill
 
+# ============================================================
+# 手動 Backfill (v3.4 升級版)
+#
+# 兩種用法:
+#   1) 指定股票模式(推薦):stocks 填逗號分隔 stock_id
+#      → 走 --stock (cache hit,秒完成,不吃 FinMind API)
+#      → 用於補資料缺欄、修某檔資料 bug、驗證新 pipeline 邏輯
+#
+#   2) 全市場模式:stocks 留空
+#      → 走 --backfill (force refresh 全部 · 90 分鐘可能 timeout)
+#      → 通常不建議,交給每日 scheduled-backfill 分批跑
+#
+# 舊版 max_stocks input 已移除(build.py 從未使用該參數)
+# ============================================================
+
 on:
   workflow_dispatch:
     inputs:
-      max_stocks:
-        description: "本次最多處理幾檔 (0 = 全部)"
+      stocks:
+        description: "指定 stock_id 清單(逗號分隔,如 2330,2454,3037)· 留空 = 全市場 --backfill(90 分可能 timeout)"
         required: false
-        default: "0"
+        default: ""
 
 permissions:
   contents: write
+
+# 避免和 scheduled-backfill 或其他手動 backfill 打架
+concurrency:
+  group: pipeline-manual-backfill
+  cancel-in-progress: false
 
 jobs:
   backfill:
     runs-on: ubuntu-latest
     timeout-minutes: 350
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,12 +56,33 @@ jobs:
           key: pipeline-backfill-${{ github.run_id }}
           restore-keys: |
             pipeline-backfill-
+            pipeline-batch-
+            pipeline-daily-
             pipeline-raw-
 
-      - name: Run backfill (forced refresh)
+      - name: Run pipeline
         env:
           FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
-        run: python -m pipeline.build --backfill
+        run: |
+          STOCKS="${{ github.event.inputs.stocks }}"
+          if [ -n "$STOCKS" ]; then
+            # 指定股票模式:走 --stock (cache hit + rebuild scanner row)
+            STOCK_ARGS=""
+            IFS=',' read -ra IDS <<< "$STOCKS"
+            for id in "${IDS[@]}"; do
+              id=$(echo "$id" | xargs)  # trim whitespace
+              if [ -n "$id" ]; then
+                STOCK_ARGS="$STOCK_ARGS --stock $id"
+              fi
+            done
+            echo "[MODE] Manual rebuild specific stocks (cache hit, no API)"
+            echo "Executing: python -m pipeline.build $STOCK_ARGS"
+            python -m pipeline.build $STOCK_ARGS
+          else
+            echo "[MODE] Full market backfill (force refresh · may timeout)"
+            echo "Executing: python -m pipeline.build --backfill"
+            python -m pipeline.build --backfill
+          fi
 
       - name: Save cache
         if: always()
@@ -48,6 +90,14 @@ jobs:
         with:
           path: cache/
           key: pipeline-backfill-${{ github.run_id }}
+
+      - name: Show meta.json
+        if: always()
+        run: |
+          if [ -f data/meta.json ]; then
+            echo "=== meta.json ==="
+            cat data/meta.json
+          fi
 
       - name: Commit updated data
         run: |
@@ -57,6 +107,31 @@ jobs:
           if git diff --cached --quiet; then
             echo "No data changes"
           else
-            git commit -m "Backfill $(date -u +%Y-%m-%d)"
+            LABEL="${{ github.event.inputs.stocks }}"
+            if [ -n "$LABEL" ]; then
+              git commit -m "Backfill (manual · stocks=$LABEL) $(TZ=Asia/Taipei date +%Y-%m-%d)"
+            else
+              git commit -m "Backfill (manual · full) $(TZ=Asia/Taipei date +%Y-%m-%d)"
+            fi
             git push
+          fi
+
+      # === GitHub Actions Summary(方便 review)===
+      - name: Post job summary
+        if: always()
+        run: |
+          echo "## 🛠 Manual Backfill" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **TPE 時間**: $(TZ=Asia/Taipei date +'%Y-%m-%d %H:%M')" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ github.event.inputs.stocks }}" ]; then
+            echo "- **模式**: 指定股票 (cache hit, no API)" >> $GITHUB_STEP_SUMMARY
+            echo "- **Stocks**: \`${{ github.event.inputs.stocks }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **模式**: 全市場 \`--backfill\` (force refresh)" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f data/meta.json ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat data/meta.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
           fi
