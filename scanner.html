@@ -633,7 +633,7 @@ const templates = {
   },
 };
 // v3.4: 所有固定 + 動態欄位皆可排序(sortableKeys 直接涵蓋所有可能 key)
-const sortableKeys = new Set(['id', 'name', 'industry', 'rev', 'revYoY', 'gm', 'om', 'nm', 'score', 'clYoY', 'clRatio', 'gc']);
+const sortableKeys = new Set(['id', 'name', 'industry', 'rev', 'revYoY', 'gm', 'om', 'nm', 'score', 'clYoY', 'clRatio', 'gc', 'opYoY']);
 const perPage = 25;
 const THRESHOLD_TO_YI = 50000;
 
@@ -845,6 +845,11 @@ const dynamicColumnCandidates = [
     key: 'gc', label: '動能狀態', tip: '近 30 天內 3MA 由下穿越 12MA(黃金交叉),為月營收動能轉正訊號。',
     active: () => state.gc || state.templates.includes('momentum-turn')
   },
+  // v3.4 P2 補強: 營運槓桿釋放模板觸發 · 顯示 opYoY 讓使用者排序找爆發最強
+  {
+    key: 'opYoY', label: '營益 YoY', tip: '營業利益相較去年同期的變化百分比。>50% 為爆發性成長。「營運槓桿釋放」模板核心指標。',
+    active: () => state.templates.includes('operating-leverage')
+  },
 ];
 function getActiveColumns() {
   return [...fixedColumns, ...dynamicColumnCandidates.filter(c => c.active())];
@@ -864,7 +869,8 @@ function renderCell(stock, column, revUnit) {
     case 'industry': return `<td class="stock-industry">${industries[stock.industry]}</td>`;
     case 'rev':      return `<td>${formatMoney(v, revUnit)}</td>`;
     case 'revYoY':
-    case 'clYoY':    return `<td class="${v > 0 ? 'value-positive' : v < 0 ? 'value-negative' : ''}">${v == null ? '—' : formatSigned(v)}</td>`;
+    case 'clYoY':
+    case 'opYoY':    return `<td class="${v > 0 ? 'value-positive' : v < 0 ? 'value-negative' : ''}">${v == null ? '—' : formatSigned(v)}</td>`;
     case 'gm':
     case 'om':
     case 'nm':
@@ -881,7 +887,7 @@ function renderMobileChip(stock, column) {
     return v ? '<span class="mobile-chip on">✓ 黃金交叉</span>' : '';  // 未達成時該卡片不顯示 gc chip
   }
   if (v == null) return `<span class="mobile-chip">${column.label} —</span>`;
-  if (column.key === 'clYoY') {
+  if (column.key === 'clYoY' || column.key === 'opYoY') {
     const cls = v > 0 ? 'value-positive' : v < 0 ? 'value-negative' : '';
     return `<span class="mobile-chip ${cls}">${column.label} ${formatSigned(v)}</span>`;
   }
@@ -1040,8 +1046,14 @@ function bindControls() {
     if (!templates[selected]) return;
     // v3.4: toggle · 已選則移除,未選則加入(Q1 A · AND · Q3 A · pill 高亮)
     const idx = state.templates.indexOf(selected);
-    if (idx >= 0) state.templates.splice(idx, 1);
+    const wasSelected = idx >= 0;
+    if (wasSelected) state.templates.splice(idx, 1);
     else state.templates.push(selected);
+    // v3.4 P2 補強: 點「營運槓桿釋放」且從無到有選中時,自動用 opYoY 降序排(強者浮到最前)
+    if (!wasSelected && selected === 'operating-leverage') {
+      state.sortKey = 'opYoY';
+      state.sortDir = 'desc';
+    }
     state.page = 1; renderAll(); syncUrl('push');
   });
   document.addEventListener('click', event => {

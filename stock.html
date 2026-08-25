@@ -2333,17 +2333,20 @@ function renderMaChart() {
     const tip = length === 3 ? `近 3 個${unitName}營收的算術平均。反映短期動能。` : length === 6 ? `近 6 個${unitName}營收的算術平均。反映中期動能。` : `近 12 個${unitName}營收的算術平均。反映長期趨勢。`;
     button.dataset.tooltip = tip;
   });
-  const crossList = state.period === 'Y' ? [] : crosses(averages[3], averages[12]);
+  // v3.4: 交叉點僅在 3MA + 12MA 兩者皆可見時繪製 (Q2-A · 嚴格條件 · 避免關掉 12MA 時 3MA 上還有孤立圓點的誤導)
+  const showCrosses = state.maVisible[3] && state.maVisible[12] && state.period !== 'Y';
+  const crossList = showCrosses ? crosses(averages[3], averages[12]) : [];
   const radius = averages[3].map(() => 0);
   const colors = averages[3].map(() => 'transparent');
-  crossList.forEach(cross => { radius[cross.index] = 6; colors[cross.index] = cross.type === 'golden' ? '#5eead4' : '#f87171'; });
+  // v3.4: 圓點視覺優化 · 半徑從 6 縮到 3.5 · 避免均線密集區遮擋 (Q3-A)
+  crossList.forEach(cross => { radius[cross.index] = 3.5; colors[cross.index] = cross.type === 'golden' ? '#5eead4' : '#f87171'; });
   if (maChart) maChart.destroy();
   maChart = new Chart(document.getElementById('maChart'), {
     data: {
       labels: series.map(item => item.label),
       datasets: [
         { type: 'bar', label: `${unitName}營收`, data: scaledValues, backgroundColor: 'rgba(212,165,116,0.16)', borderColor: 'transparent', borderRadius: 2, barPercentage: 0.65, categoryPercentage: 0.85 },
-        { type: 'line', label: `3 ${unitName}均線`, data: scaledAverages[3], hidden: !state.maVisible[3], borderColor: '#5eead4', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, spanGaps: false, pointRadius: radius, pointBackgroundColor: colors, pointBorderColor: colors, pointHoverRadius: 6 },
+        { type: 'line', label: `3 ${unitName}均線`, data: scaledAverages[3], hidden: !state.maVisible[3], borderColor: '#5eead4', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, spanGaps: false, pointRadius: radius, pointBackgroundColor: colors, pointBorderColor: '#0d0f14', pointBorderWidth: 1.5, pointHoverRadius: 8, pointHoverBorderWidth: 2 },
         { type: 'line', label: `6 ${unitName}均線`, data: scaledAverages[6], hidden: !state.maVisible[6] || state.period === 'Y', borderColor: '#fbbf24', backgroundColor: 'transparent', borderWidth: 1.8, tension: 0.3, spanGaps: false, pointRadius: 0 },
         { type: 'line', label: `12 ${unitName}均線`, data: scaledAverages[12], hidden: !state.maVisible[12] || state.period === 'Y', borderColor: '#8a94a8', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4, 3], tension: 0.3, spanGaps: false, pointRadius: 0 },
       ]
