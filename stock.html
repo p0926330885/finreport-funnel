@@ -987,6 +987,14 @@ input { font-family: inherit; }
 .chart-annot .dot.golden { background: var(--mint); box-shadow: 0 0 5px var(--mint); }
 .chart-annot .dot.death  { background: var(--coral); box-shadow: 0 0 5px var(--coral); }
 
+/* v3.4: 資料範圍 chip · 靠右對齊 · font-num 呈現數字期間 · 只在資料不足時顯示 */
+.chart-annot .data-range-item {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-family: var(--font-num);
+  letter-spacing: 0.02em;
+}
+
 /* =========================================================
    Data table
    ========================================================= */
@@ -1542,6 +1550,8 @@ body[data-status="ok"] .status-panel { display: none; }
     <div class="chart-annot">
       <span class="item" tabindex="0" data-tooltip="短期均線由下往上穿過長期均線。代表動能轉正,通常視為多方訊號。"><span class="dot golden"></span>黃金交叉 · 動能轉正</span>
       <span class="item" tabindex="0" data-tooltip="短期均線由上往下穿過長期均線。代表動能轉負,通常視為空方訊號。"><span class="dot death"></span>死亡交叉 · 動能轉負</span>
+      <!-- v3.4: 資料範圍 chip · 資料 < 60 個月時顯示,讓使用者立刻理解為什麼均線這麼短(如新股) -->
+      <span class="item data-range-item" id="maDataRangeChip" hidden></span>
     </div>
   </section>
 
@@ -2338,13 +2348,26 @@ function renderMaChart() {
   document.querySelectorAll('#periodToggle button').forEach(button => button.classList.toggle('active', button.dataset.period === state.period));
   document.querySelectorAll('#maLegends .ma-toggle').forEach(button => {
     const length = Number(button.dataset.ma);
-    const disabled = state.period === 'Y' && length !== 3;
+    // v3.4: 資料不足以算 window 時也 disable(新股 monthly 少於 12 個月時 12MA disable + tooltip 提示)
+    const insufficientData = series.length < length;
+    const disabled = (state.period === 'Y' && length !== 3) || insufficientData;
     button.disabled = disabled;
     button.classList.toggle('hidden-line', !state.maVisible[length]);
     button.querySelector('span:last-child').textContent = `${length} ${unitName}均線`;
-    const tip = length === 3 ? `近 3 個${unitName}營收的算術平均。反映短期動能。` : length === 6 ? `近 6 個${unitName}營收的算術平均。反映中期動能。` : `近 12 個${unitName}營收的算術平均。反映長期趨勢。`;
-    button.dataset.tooltip = tip;
+    const baseTip = length === 3 ? `近 3 個${unitName}營收的算術平均。反映短期動能。` : length === 6 ? `近 6 個${unitName}營收的算術平均。反映中期動能。` : `近 12 個${unitName}營收的算術平均。反映長期趨勢。`;
+    button.dataset.tooltip = insufficientData ? `${baseTip} · ⚠️ 資料不足(需 ${length} 個${unitName},目前僅 ${series.length} 個)` : baseTip;
   });
+
+  // v3.4: 資料範圍 chip 更新 · < 60 個月時顯示(新股歷史不足時提示使用者)
+  const dataRangeChip = document.getElementById('maDataRangeChip');
+  if (dataRangeChip) {
+    if (series.length < 60 && series.length > 0) {
+      dataRangeChip.textContent = `📅 資料範圍:${series[0].label} ~ ${series[series.length - 1].label}(${series.length} 個${unitName})`;
+      dataRangeChip.hidden = false;
+    } else {
+      dataRangeChip.hidden = true;
+    }
+  }
   // v3.4: 交叉點動態選對 · truth table:
   //   3=off              → 不畫(3 是必要基準)
   //   3=on, 6=off, 12=off → 不畫(單條無對照)
