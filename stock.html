@@ -83,7 +83,7 @@ input { font-family: inherit; }
   -webkit-backdrop-filter: blur(16px);
   position: sticky;
   top: 0;
-  z-index: 30;
+  z-index: 200;  /* v3.4: 30→200 · 對齊 scanner(40)並超越 tooltip-float(100) · 修 mobile 搜尋 dropdown 被蓋 bug */
   display: flex;
   align-items: center;
   padding: 0 24px;
@@ -175,10 +175,13 @@ input { font-family: inherit; }
 }
 /* v3.4: 智慧搜尋 dropdown(和 scanner 一致) */
 .search-dropdown {
-  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  /* v3.4: 徹底修法 · absolute→fixed + append 到 body,跳出 topbar 的 backdrop-filter stacking context
+   * 之前的 z-index 100→999 修不好,因為 topbar 的 backdrop-filter: blur(16px) 建立獨立 stacking context 且形成 containing block,
+   * z-index 值多高都突破不了。改成 fixed + 掛 body 才能真正浮到最上層 */
+  position: fixed; z-index: 10000;
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   box-shadow: 0 6px 18px rgba(0,0,0,0.45);
-  z-index: 100; max-height: 320px; overflow-y: auto;
+  max-height: 320px; overflow-y: auto;
 }
 .search-item {
   padding: 8px 12px; display: flex; gap: 10px; align-items: center;
@@ -659,9 +662,9 @@ input { font-family: inherit; }
 }
 
 .tier-sub {
-  /* v3.4: muted→dim (對比 3.2→5.4 · WCAG AA) + weight 500 · 提升輔助資訊可讀性,主數字仍領先 */
-  font-size: 10.5px;
-  color: var(--text-dim);
+  /* v3.4: dim→次亮階 (對比 5.4→~10:1) · 字級 10.5→11.5 · 眼睛不再需要瞇著看,但仍低於主數字 15:1 的層級 */
+  font-size: 11.5px;
+  color: rgba(232, 236, 242, 0.72);
   font-weight: 500;
   font-family: var(--font-num);
   letter-spacing: 0.02em;
@@ -698,9 +701,10 @@ input { font-family: inherit; }
 }
 
 .tier-val .u {
-  font-size: 10.5px;
-  color: var(--text-muted);
-  font-weight: 400;
+  /* v3.4: 漏斗每層數字後的單位小字 · muted (3.2:1) → 次亮階 (~10:1) · 和 tier-sub 對齊 */
+  font-size: 11px;
+  color: rgba(232, 236, 242, 0.72);
+  font-weight: 500;
   margin-left: 3px;
 }
 
@@ -777,9 +781,9 @@ input { font-family: inherit; }
 }
 
 .leak-note {
-  /* v3.4: muted→dim (對比 3.2→5.4 · WCAG AA) + weight 500 · 右側百分比從灰到看不見 → 淡但清晰 */
-  font-size: 10px;
-  color: var(--text-dim);
+  /* v3.4: dim→次亮階 (對比 5.4→~10:1) · 字級 10→11 · 右側占比從「還是要瞇」升級為「一目了然」*/
+  font-size: 11px;
+  color: rgba(232, 236, 242, 0.72);
   font-weight: 500;
   white-space: nowrap;
   font-family: var(--font-num);
@@ -2694,16 +2698,22 @@ async function boot() {
         }
       } catch (e) { /* silent · 降級為純數字跳轉 */ }
 
-      const box = searchBox.parentElement;
-      box.style.position = 'relative';
+      // v3.4: dropdown 掛 body(而非 searchBox parent)· 跳出 topbar 的 backdrop-filter stacking context
       const dropdown = document.createElement('div');
       dropdown.className = 'search-dropdown';
       dropdown.hidden = true;
-      box.appendChild(dropdown);
+      document.body.appendChild(dropdown);
 
       let matches = [], activeIdx = -1;
       const industryLabel = ind => ind === 'finance' ? '金融' : ind === 'semi' ? '半導體' : ind === 'traditional' ? '傳產' : '';
 
+      function positionDropdown() {
+        // v3.4: dropdown 位置動態計算 · 因為 fixed positioning 需要絕對座標
+        const rect = searchBox.getBoundingClientRect();
+        dropdown.style.top = `${rect.bottom + 4}px`;
+        dropdown.style.left = `${rect.left}px`;
+        dropdown.style.width = `${rect.width}px`;
+      }
       function render() {
         if (matches.length === 0) { dropdown.hidden = true; return; }
         dropdown.innerHTML = matches.map((s, i) => `
@@ -2712,8 +2722,11 @@ async function boot() {
             <span class="s-name">${s.name}</span>
             <span class="s-ind">${industryLabel(s.industry)}</span>
           </div>`).join('');
+        positionDropdown();
         dropdown.hidden = false;
       }
+      // v3.4: window resize 時如 dropdown 可見則重算位置(sticky topbar 內搜尋框寬度會隨視窗變)
+      window.addEventListener('resize', () => { if (!dropdown.hidden) positionDropdown(); });
       function jump(id) { if (id) location.href = `stock.html?id=${id}`; }
       function scrollActive() {
         const el = dropdown.querySelector('.search-item.active');
