@@ -149,8 +149,12 @@ def run(mode: str, stock_ids: list[str] | None = None, force: bool = False, batc
 
     log.info("Built %d stock detail files (fail=%d)", ok, fail)
 
-    # 5. Scanner index (merge with existing if batch mode)
-    if batch is not None:
+    # 5. Scanner index (upsert with existing if partial mode: batch OR explicit --stock)
+    # - batch mode: 7 批接力必須 upsert,才能累積成完整全市場
+    # - --stock 明確指定股票: 也必須 upsert,否則會誤覆蓋整個 scanner_index 為那幾檔
+    #   (v3.4 修正 · 之前 --stock 20 檔會把整份 index 從 312 縮成 20 檔)
+    # - 完整 daily/backfill 全市場: 覆蓋(重建整份 index),行為維持
+    if batch is not None or stock_ids:
         merged_rows = _merge_scanner_index(scanner_rows)
     else:
         merged_rows = scanner_rows
