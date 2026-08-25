@@ -659,8 +659,10 @@ input { font-family: inherit; }
 }
 
 .tier-sub {
+  /* v3.4: muted→dim (對比 3.2→5.4 · WCAG AA) + weight 500 · 提升輔助資訊可讀性,主數字仍領先 */
   font-size: 10.5px;
-  color: var(--text-muted);
+  color: var(--text-dim);
+  font-weight: 500;
   font-family: var(--font-num);
   letter-spacing: 0.02em;
 }
@@ -775,8 +777,10 @@ input { font-family: inherit; }
 }
 
 .leak-note {
+  /* v3.4: muted→dim (對比 3.2→5.4 · WCAG AA) + weight 500 · 右側百分比從灰到看不見 → 淡但清晰 */
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--text-dim);
+  font-weight: 500;
   white-space: nowrap;
   font-family: var(--font-num);
   letter-spacing: 0.02em;
