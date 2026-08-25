@@ -2419,7 +2419,8 @@ const v2ViewSchemas = {
 };
 
 function renderTable() {
-  const columns = v2ViewSchemas[state.view];
+  // v3.4: hasCL=false 時過濾掉合約負債相關欄位 (季度資料 · 成長率 view 曾顯示 clYoY,前端 bug 修正)
+  const columns = (v2ViewSchemas[state.view] || []).filter(c => hasCL || !c.key.startsWith('cl'));
   const rows = sortRows(stock.quarterly.map((q, index) => quarterRow(index)).slice().reverse(), state.sortBy, state.sortDir);
   const colUnits = Object.fromEntries(columns.map(column => [column.key, unitForColumn(column, rows)]));
   document.getElementById('dataHead').innerHTML = `<tr>${columns.map(column => {
