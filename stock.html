@@ -2333,9 +2333,19 @@ function renderMaChart() {
     const tip = length === 3 ? `近 3 個${unitName}營收的算術平均。反映短期動能。` : length === 6 ? `近 6 個${unitName}營收的算術平均。反映中期動能。` : `近 12 個${unitName}營收的算術平均。反映長期趨勢。`;
     button.dataset.tooltip = tip;
   });
-  // v3.4: 交叉點僅在 3MA + 12MA 兩者皆可見時繪製 (Q2-A · 嚴格條件 · 避免關掉 12MA 時 3MA 上還有孤立圓點的誤導)
-  const showCrosses = state.maVisible[3] && state.maVisible[12] && state.period !== 'Y';
-  const crossList = showCrosses ? crosses(averages[3], averages[12]) : [];
+  // v3.4: 交叉點動態選對 · truth table:
+  //   3=off              → 不畫(3 是必要基準)
+  //   3=on, 6=off, 12=off → 不畫(單條無對照)
+  //   3=on, 6=off, 12=on  → 3 vs 12(標準)
+  //   3=on, 6=on,  12=off → 3 vs 6 (短期節奏)
+  //   3=on, 6=on,  12=on  → 3 vs 12(12 優先,避免視覺重疊)
+  //   非月頻(Y): 一律不畫
+  let crossLong = null;  // null 不畫 · 6 → 3vs6 · 12 → 3vs12
+  if (state.period !== 'Y' && state.maVisible[3]) {
+    if (state.maVisible[12]) crossLong = 12;
+    else if (state.maVisible[6]) crossLong = 6;
+  }
+  const crossList = crossLong === null ? [] : crosses(averages[3], averages[crossLong]);
   const radius = averages[3].map(() => 0);
   const colors = averages[3].map(() => 'transparent');
   // v3.4: 圓點視覺優化 · 半徑從 6 縮到 3.5 · 避免均線密集區遮擋 (Q3-A)
@@ -2628,7 +2638,7 @@ async function boot() {
       growthSortBy: null,
       growthSortDir: 'desc',
       period: 'M',
-      maVisible: { 3: true, 6: true, 12: true },
+      maVisible: { 3: true, 6: false, 12: true },  // v3.4: 6MA 預設關閉 · 3+12 短長對照最標準
     };
     // v3.4: hasCL 統一使用 pipeline 產出 (stock.hasCL),不再前端自算
     // 前端自算 max(cl)/max(rev) > 0.15 對金融股會誤判 true (2882 CL 71,359 億 / rev 725 億 = 98 倍)

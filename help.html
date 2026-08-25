@@ -272,34 +272,59 @@ section.doc-section pre {
     <ul><li><strong>營收 YoY</strong>:相較去年同期營收的變化。<strong>&gt;15% 為強勁成長</strong>、<strong>&lt;0% 為衰退</strong></li></ul>
 
     <h4>訂單能見度</h4>
-    <ul><li><strong>合約負債 YoY</strong>:合約負債期末相較去年同期的變化。<strong>&gt;30% 訂單池強勁累積</strong>、<strong>&lt;0% 訂單轉弱</strong></li></ul>
+    <ul>
+      <li><strong>合約負債 YoY</strong>:合約負債期末相較去年同期的變化。<strong>&gt;30% 訂單池強勁累積</strong>、<strong>&lt;0% 訂單轉弱</strong></li>
+      <li><strong>合約負債佔股本比(v3.4 新增)</strong>:合約負債 ÷ 普通股股本 × 100%,反映訂單池相對股本規模的倍數。範圍 <strong>0-200%</strong>(上限拉到 200 代表「≥200%」無上限,涵蓋建材/設備等超高比例標的)。<strong>&gt;50% 訂單池達股本一半</strong>、<strong>&gt;100% 訂單池已超越整個股本水位</strong></li>
+    </ul>
     <div class="warn-box">
       <strong>注意</strong>
-      啟用此條件時,<strong>自動排除沒有合約負債的股票</strong>(如金融股、純服務業)。
+      啟用「合約負債 YoY」或「合約負債佔股本比(下限 &gt; 0%)」時,<strong>自動排除沒有合約負債的股票</strong>(如金融股、純服務業)。合約負債佔股本比下限 = 0% 時不排除無 CL 標的,表格欄位顯示「—」。
     </div>
 
     <h4>交叉指標</h4>
     <ul><li><strong>3MA vs 12MA 近 1 月黃金交叉</strong>:月營收 3 月均線由下穿越 12 月均線 = 動能轉正訊號</li></ul>
 
-    <h3>上方 · 4 個策略模板(可複選,詳見第 8 節)</h3>
+    <h3>上方 · 5 個策略模板(可複選,詳見第 8 節)</h3>
     <table class="doc-table">
       <tr><th>模板</th><th>意義</th><th>全市場預估命中</th></tr>
       <tr><td><strong>訂單池累積、認列跟上</strong></td><td>訂單池累積 + 營收跟著增長</td><td>30-80 檔</td></tr>
       <tr><td><strong>本業獲利穩健</strong></td><td>毛利率高 + 營益率穩(適合長期持有)</td><td>200-400 檔</td></tr>
       <tr><td><strong>三率同升</strong></td><td>三率同時提升(獲利品質全面改善)</td><td>100-300 檔</td></tr>
       <tr><td><strong>動能轉正</strong></td><td>近期月營收動能轉正 + 體質健康</td><td>50-150 檔</td></tr>
+      <tr><td><strong>營運槓桿釋放(v3.4 新增)</strong></td><td>營益增速 &gt; 營收增速 · 固定成本稀釋、獲利爆發狀態</td><td>60-100 檔</td></tr>
     </table>
 
-    <h3>中間 · 結果表</h3>
+    <h3>中間 · 結果表(v3.4 · 固定 8 欄 + 動態 5 欄機制)</h3>
+    <p>解決「使用者調了 slider 或選了模板,結果表卻看不到對應數據」的痛點。表格採「常態固定欄 + 條件觸發動態欄」設計。</p>
+
+    <h4>固定欄位(8 欄 · 永遠顯示 · 提供基礎體質輪廓)</h4>
     <table class="doc-table">
       <tr><th>欄位</th><th>意義</th></tr>
       <tr><td>股號 / 名稱</td><td>公司代號和中文名</td></tr>
       <tr><td>產業</td><td>半導體 / 傳產 / 金融 / 建材營造 等</td></tr>
-      <tr><td>當季營收</td><td>最新一季認列的營收</td></tr>
-      <tr><td>營收 YoY</td><td>相較去年同期營收變化</td></tr>
+      <tr><td>當季營收</td><td>最新一季認列的營收(單位智慧顯示:億 / 百萬)</td></tr>
+      <tr><td>營收 YoY</td><td>相較去年同期營收變化(正紅負綠)</td></tr>
+      <tr><td><strong>毛利率(v3.4 升格為固定)</strong></td><td>毛利 ÷ 營收 · 反映定價力與成本控制</td></tr>
       <tr><td>營益率</td><td>本業獲利率</td></tr>
       <tr><td><strong>健康度總分</strong></td><td>4 指標各 0-2 分,加總 0-8 分 · <span class="badge badge-green">≥6 綠</span> <span class="badge badge-amber">3-5.9 黃</span> <span class="badge badge-red">&lt;3 紅</span></td></tr>
     </table>
+
+    <h4>動態欄位(5 個候選 · 依 sidebar slider 或策略模板觸發自動右側展開)</h4>
+    <table class="doc-table">
+      <tr><th>動態欄位</th><th>觸發條件(滿足任一即顯示)</th></tr>
+      <tr><td>淨利率</td><td>淨利率 Slider 收窄 · 或「本業獲利穩健」/「三率同升」模板</td></tr>
+      <tr><td>合約負債 YoY</td><td>合約負債 YoY Slider 收窄 · 或「訂單池累積」模板</td></tr>
+      <tr><td>合約負債 / 股本比</td><td>合約負債佔股本比 Slider 收窄 · 或「訂單池累積」模板</td></tr>
+      <tr><td>動能狀態</td><td>「近 1 月黃金交叉」toggle · 或「動能轉正」模板 · 綠色 chip「✓ 黃金交叉」或灰色「—」</td></tr>
+      <tr><td><strong>營益 YoY(v3.4 新增)</strong></td><td>「營運槓桿釋放」模板 · <strong>點模板時自動用此欄降序排序</strong>(強者浮到最前)</td></tr>
+    </table>
+
+    <ul>
+      <li><strong>欄位去重</strong>:模板 + slider 同時觸發同一欄位,只渲染 1 欄</li>
+      <li><strong>排序</strong>:所有欄位表頭可點,第一次點 = 降序 (↓),再點切升序 (↑)</li>
+      <li><strong>版面保護</strong>:欄位多時桌面版自動橫向捲動,文字不壓縮</li>
+    </ul>
+
     <p>點任一列 → 跳到該股票的個股詳細頁。</p>
 
     <h3>右上角 · 智慧搜尋框</h3>
@@ -375,10 +400,18 @@ section.doc-section pre {
     <p>Chart + 表格顯示 20 季(5 年)的變化。可切換指標(營收/毛利/營益/淨利/EPS/合約負債)和模式(YoY / QoQ)。</p>
 
     <h3>板塊 6 · 月營收動能</h3>
-    <p>顯示近 60 個月(5 年)的月營收 bar,並疊上 3MA / 6MA / 12MA 三條均線。</p>
+    <p>顯示近 60 個月(5 年)的月營收 bar,並疊上 3MA / 6MA / 12MA 三條均線。<strong>預設顯示 3MA + 12MA</strong>(短期 vs 長期動能對照),點擊圖例可切換 6MA 顯示。</p>
     <ul>
-      <li>🟢 <strong>黃金交叉</strong>:3MA 由下穿越 12MA · 動能轉正</li>
-      <li>🔴 <strong>死亡交叉</strong>:3MA 由上跌破 12MA · 動能轉負</li>
+      <li>🟢 <strong>黃金交叉</strong>:以 <strong>3MA(短期動能)</strong>為基準,由下穿越較長期均線 → 動能轉正</li>
+      <li>🔴 <strong>死亡交叉</strong>:以 <strong>3MA(短期動能)</strong>為基準,由上跌破較長期均線 → 動能轉負</li>
+      <li>📌 <strong>對照均線動態切換</strong>(v3.4 新增):
+        <ul>
+          <li><strong>3 + 12 可見</strong>(預設) → 標記 <strong>3 vs 12</strong> 交叉(標準長期動能對照)</li>
+          <li><strong>3 + 6 可見</strong> → 標記 <strong>3 vs 6</strong> 交叉(觀察更短期動能節奏)</li>
+          <li><strong>3 + 6 + 12 三線全開</strong> → 仍只標記 <strong>3 vs 12</strong>,避免兩組交叉點視覺重疊</li>
+          <li><strong>其他狀態</strong>(缺 3MA 基準線、或只單線)→ 不繪製交叉點</li>
+        </ul>
+      </li>
     </ul>
 
     <h3>板塊 7 · 季度資料表(4 個 tab)</h3>
@@ -486,7 +519,7 @@ section.doc-section pre {
   <!-- 8. Templates -->
   <section class="doc-section" id="templates">
     <h2>8. 策略模板複選(v3.4 新功能)</h2>
-    <p>選股掃描頁上方 4 個模板 pill 按鈕支援<strong>複選</strong>,可以同時套用多個嚴格條件精選標的。</p>
+    <p>選股掃描頁上方 5 個模板 pill 按鈕支援<strong>複選</strong>,可以同時套用多個嚴格條件精選標的。</p>
 
     <h3>操作方式</h3>
     <ul>
@@ -514,13 +547,14 @@ section.doc-section pre {
       勾多個嚴格條件時,可能出現「無符合條件的股票」空狀態,這是正常現象。放寬其中一個模板或 slider 條件即可。
     </div>
 
-    <h3>4 個模板的隱含規則</h3>
+    <h3>5 個模板的隱含規則</h3>
     <table class="doc-table">
       <tr><th>模板</th><th>隱含規則(股票必須符合)</th></tr>
       <tr><td><strong>訂單池累積、認列跟上</strong></td><td>有合約負債 · 且 clYoY ≥ 30% · 且 revYoY ≥ 15%</td></tr>
       <tr><td><strong>本業獲利穩健</strong></td><td>營益率 ≥ 8% · 且 |業外占淨利| &lt; 25%</td></tr>
       <tr><td><strong>三率同升</strong></td><td>毛利率 QoQ ≥ 0 · 且 營益率 QoQ ≥ 0 · 且 淨利率 QoQ ≥ 0</td></tr>
       <tr><td><strong>動能轉正</strong></td><td>近 1 月 3MA vs 12MA 黃金交叉</td></tr>
+      <tr><td><strong>營運槓桿釋放(v3.4)</strong></td><td>revYoY &gt; 0 · 且 opYoY &gt; revYoY · 且 gmYoY ≥ 0(pp 差值)· null 嚴格排除<br><strong>純粹狀態判定,無定值門檻</strong> · 強度交給左側 slider 主動加強</td></tr>
     </table>
   </section>
 
@@ -590,6 +624,27 @@ section.doc-section pre {
       動能轉正只是月營收訊號,實務投資請搭配技術面(K 線、量能、法人籌碼)。
     </div>
 
+    <h3>實例 4 · 找「營運槓桿釋放」的爆發成長股(v3.4 新增)</h3>
+    <p><strong>適用場景</strong>:找「營收擴張帶動獲利跳躍」的股 · 通常是產能利用率快速拉升、固定成本被稀釋的公司(半導體上車、傳產景氣復甦、擴產前期公司)</p>
+    <p><strong>操作</strong>:</p>
+    <ol>
+      <li>勾模板「<strong>營運槓桿釋放</strong>」→ 自動篩出 revYoY &gt; 0 · opYoY &gt; revYoY · gmYoY ≥ 0 的股</li>
+      <li>表格<strong>自動用「營益 YoY」降序排序</strong>,爆發最強的浮到最前面</li>
+      <li>(可選)Sidebar 加強:拉「營收 YoY &gt; 15%」排除低成長基期股,或拉「毛利率 &gt; 25%」排除純規模擴張型公司</li>
+      <li>預期命中:<strong>60-100 檔</strong>(全市場,無 sidebar 加強)</li>
+    </ol>
+    <p><strong>判讀步驟</strong>:</p>
+    <ol>
+      <li>看「營益 YoY」欄位,由高到低篩前 10-20 檔(通常 &gt;100% 者值得深入研究)</li>
+      <li>點進個股頁 → 看「成長率分析 · 營益成長率」→ <strong>確認近 2-3 季 opYoY 連續正向</strong>(排除單季爆發假象)</li>
+      <li>看「毛利率」欄位:高毛利 (&gt;30%) 且 opYoY 大幅正向 = 定價力保持 + 費用稀釋的優質組合;低毛利 (&lt;15%) 且 opYoY 大幅正向 = 純規模效應,持續性較弱</li>
+      <li>看「自動判讀 s01」→ 是否為「M03 三率擴張」或「M04 毛利改善」等強勢模式</li>
+    </ol>
+    <div class="warn-box">
+      <strong>注意</strong>
+      營運槓桿釋放屬「純狀態」模板,沒有預設強度門檻,可能命中一些「基期低」的爆發假象。搭配 sidebar 拉「營收 YoY &gt; 15%」和「毛利率 &gt; 20%」可有效過濾這類雜訊。
+    </div>
+
     <h3>策略組合思路速查</h3>
     <table class="doc-table">
       <tr><th>目標</th><th>建議模板組合</th><th>Sidebar 建議條件</th></tr>
@@ -653,7 +708,13 @@ section.doc-section pre {
     <p>可以。手機上:</p>
     <ul>
       <li>選股掃描的篩選 sidebar 會收合成 drawer(點「篩選 (N)」按鈕滑出)</li>
-      <li>表格改為卡片式,方便滑動瀏覽</li>
+      <li>表格改為<strong>卡片式高密度顯示(v3.4 升級)</strong>:
+        <ul>
+          <li><strong>Header</strong>:股號 + 名稱 + 產業 + 健康度總分 chip</li>
+          <li><strong>Body 2×2 Grid</strong>:當季營收 · 營收 YoY · 毛利率 · 營益率</li>
+          <li><strong>Footer 動態指標區</strong>:啟用 slider 或模板時,底部自動帶出對應 chip(如「淨利率:12.3%」、「CL YoY:+45%」、「營益 YoY:+180%」、「✓ 黃金交叉」)</li>
+        </ul>
+      </li>
       <li>個股頁 chart 支援縮放</li>
       <li>搜尋框跳純數字鍵盤(方便輸入股號)</li>
     </ul>
@@ -676,7 +737,7 @@ section.doc-section pre {
       <tr><td>YoY</td><td>年增率</td><td>相較去年同期</td></tr>
       <tr><td>QoQ</td><td>季增率</td><td>相較上一季</td></tr>
       <tr><td>3MA / 12MA</td><td>3 月線 / 12 月線</td><td>月營收的移動平均</td></tr>
-      <tr><td>黃金交叉</td><td>3MA 上穿 12MA</td><td>短期動能翻轉為正</td></tr>
+      <tr><td>黃金交叉</td><td>3MA 上穿較長期均線(3 vs 12 優先,若 12 隱藏則 3 vs 6)</td><td>短期動能翻轉為正</td></tr>
     </table>
   </section>
 
