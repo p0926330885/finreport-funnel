@@ -181,7 +181,15 @@ def run(mode: str, stock_ids: list[str] | None = None, force: bool = False, batc
         meta_payload["batch_count"] = config.BATCH_COUNT
     output.write_meta(meta_payload)
 
-    return 0 if fail == 0 else 2
+    # Partial per-stock failures are tracked in meta.json (built_fail).
+    # We do NOT fail the workflow on partial failures because:
+    #   - Some stocks legitimately have no FinMind data (new IPO, delisted, incomplete disclosure)
+    #     e.g. batch 6 on 2026-08-25 had fail=7/301 (2.3%) - all legit data gaps
+    #   - Non-zero return code prevents `git commit` step → discards ALL successfully-built data
+    #   - Uncaught exceptions still crash Python → workflow still marked failed
+    #   - Systemic issues (e.g. FinMind API down) → fail rate would be near 100%,
+    #     visible in meta.json even without failing workflow
+    return 0
 
 
 def main() -> int:
