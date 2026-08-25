@@ -877,6 +877,18 @@ def build_scanner_row(detail: dict) -> Optional[dict]:
     clYoY = _pct_change(cur["cl"], yr_ago["cl"]) if detail["hasCL"] and yr_ago else None
     gc = _detect_golden_cross(detail["monthly"])
 
+    # v3.4 P1: clRatio 直接抽 · quarterly 最新季已有預算值
+    clRatio = cur.get("clRatio") if detail["hasCL"] else None
+
+    # v3.4 P2: opYoY 直接抽 · quarterly 最新季已有預算值(給「營運槓桿釋放」模板)
+    opYoY = cur.get("opYoY")
+
+    # v3.4 P2: gmYoY 需自算 pp 差值 · quarterly 只有 gpYoY(毛利成長率 pct),沒有 gmYoY(毛利率 pp 差值)
+    gm_year_ago = None
+    if yr_ago and yr_ago.get("gp") and yr_ago.get("rev"):
+        gm_year_ago = yr_ago["gp"] / yr_ago["rev"] * 100
+    gmYoY = (gm - gm_year_ago) if gm is not None and gm_year_ago is not None else None
+
     return {
         "id":       detail["id"],
         "name":     detail["name"],
@@ -895,4 +907,9 @@ def build_scanner_row(detail: dict) -> Optional[dict]:
         "gc":       gc,
         "vis":      round(vis, 1)    if vis    is not None else None,
         "clYoY":    round(clYoY, 1)  if clYoY  is not None else None,
+        # v3.4 P1: clRatio 加入 scanner_index 供 sidebar slider 與動態欄位使用
+        "clRatio":  round(clRatio, 1) if clRatio is not None else None,
+        # v3.4 P2: opYoY + gmYoY 加入 scanner_index 供「營運槓桿釋放」模板使用
+        "opYoY":    round(opYoY, 1)  if opYoY  is not None else None,
+        "gmYoY":    round(gmYoY, 1)  if gmYoY  is not None else None,
     }
