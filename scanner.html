@@ -282,6 +282,18 @@ a { color: inherit; text-decoration: none; }
 .stock-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; padding-top: 11px; border-top: 1px solid var(--line-soft); font-size: 12px; }
 .stock-card-grid span { color: var(--text-dim); }
 .stock-card-grid b { color: var(--text); font: 500 12px var(--font-num); margin-left: 5px; }
+/* v3.4 P0: 桌面表格 · 動能狀態 chip */
+.momentum-chip { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; font-family: var(--font-ui); }
+.momentum-chip.on { background: rgba(64, 190, 130, 0.18); color: #6dd4a4; border: 1px solid rgba(64, 190, 130, 0.35); }
+.momentum-chip.off { color: var(--text-dim); font-family: var(--font-num); }
+/* v3.4 P0: 手機卡片 · header 主資訊左側區塊(對齊產業於股號下方) */
+.stock-card-head-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+/* v3.4 P0: 手機卡片 · footer 動態指標 chip 區 */
+.stock-card-footer { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; margin-top: 10px; border-top: 1px solid var(--line-soft); }
+.mobile-chip { display: inline-block; padding: 3px 8px; border-radius: 10px; font: 500 11px var(--font-num); background: var(--panel-2); color: var(--text-dim); white-space: nowrap; }
+.mobile-chip.on { background: rgba(64, 190, 130, 0.18); color: #6dd4a4; }
+.mobile-chip.value-positive { color: #6dd4a4; background: rgba(64, 190, 130, 0.10); }
+.mobile-chip.value-negative { color: #d47474; background: rgba(212, 116, 116, 0.10); }
 .empty-state { display: none; padding: 64px 20px; text-align: center; color: var(--empty-state-color); }
 .empty-state.show { display: block; }
 .empty-icon { width: 30px; height: 30px; margin: 0 auto 14px; color: var(--text-muted); }
@@ -476,6 +488,11 @@ body[data-status="ok"] .status-panel { display: none; }
           <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="合約負債年增率最低值" inputmode="numeric"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="合約負債年增率最高值" inputmode="numeric"><span class="range-unit">%</span></div>
           <div class="range-stack"><input type="range" data-bound="min" aria-label="合約負債年增率最低值"><input type="range" data-bound="max" aria-label="合約負債年增率最高值"></div>
         </div>
+        <div class="range-control" data-range="clRatio" data-tooltip="合約負債期末 ÷ 普通股股本 × 100%。反映訂單池相對股本規模的倍數。上限拉到 200% 代表「≥200%」無上限,涵蓋建材/設備等超高比例標的。下限 >0% 時,自動排除無合約負債的股票。">
+          <span class="range-label">合約負債/股本比</span>
+          <div class="range-inputs"><input type="number" data-bound="min-num" aria-label="合約負債佔股本比最低值" inputmode="numeric"><span class="range-sep">–</span><input type="number" data-bound="max-num" aria-label="合約負債佔股本比最高值" inputmode="numeric"><span class="range-unit">%</span></div>
+          <div class="range-stack"><input type="range" data-bound="min" aria-label="合約負債佔股本比最低值"><input type="range" data-bound="max" aria-label="合約負債佔股本比最高值"></div>
+        </div>
         <!-- v3.4: 拿掉「能見度月數」slider · 指標受營收規模扭曲,失去分級意義 -->
       </section>
 
@@ -504,6 +521,7 @@ body[data-status="ok"] .status-panel { display: none; }
           <button class="template-chip" data-template="core-stable" data-tooltip="營益率 ≥8% 且業外占淨利絕對值 <25%。本業獲利健康、業外雜訊小。">本業獲利穩健</button>
           <button class="template-chip" data-template="three-up" data-tooltip="毛利率、營益率、淨利率 QoQ 全部持平或上升。獲利品質全面改善。">三率同升</button>
           <button class="template-chip" data-template="momentum-turn" data-tooltip="近 30 天內 3MA 由下穿越 12MA。月營收動能剛剛翻正。">動能轉正</button>
+          <button class="template-chip" data-template="operating-leverage" data-tooltip="營益增速 > 營收增速(固定成本稀釋、獲利爆發狀態)。本模板僅篩選符合狀態之公司,無預設門檻;可自行於左側拉高『毛利率』或『營收 YoY』拉桿提高篩選嚴格度。">營運槓桿釋放</button>
         </div>
       </div>
 
@@ -574,6 +592,8 @@ const rangeDefs = {
   revYoY: { label: '營收 YoY', min: -100, max: 500, step: 1, unit: '%' },
   clYoY: { label: '合約負債 YoY', min: -100, max: 500, step: 1, unit: '%' },
   // v3.4: 拿掉「能見度月數」slider(指標受營收規模扭曲,失去分級意義)
+  // v3.4 P1: 合約負債佔股本比 · 上限 200 代表「≥200」無上限(建材/設備常見 300-500%)
+  clRatio: { label: '合約負債/股本比', min: 0, max: 200, step: 1, unit: '%' },
 };
 // v3.4: 策略模板改複選架構
 // 每個模板獨立 rules function,不再覆蓋 sidebar slider(sidebar/模板兩者最後 AND 交集)
@@ -594,8 +614,26 @@ const templates = {
     label: '動能轉正',
     rules: stock => !!stock.gc
   },
+  // v3.4 P2: 營運槓桿釋放 · 純粹狀態版 · 無門檻魔數,強度交給 slider
+  //   1) revYoY > 0     · 排除衰退期
+  //   2) opYoY > revYoY · 營益增速跑贏營收增速(核心)
+  //   3) gmYoY >= 0     · 排除削價競爭(pp 差值)
+  //   4) 當季 op > 0    · 排除虧轉盈基期除法失真(用 opYoY != null 代理判斷)
+  //   null 值嚴格排除
+  'operating-leverage': {
+    label: '營運槓桿釋放',
+    rules: stock => {
+      if (stock.revYoY == null || stock.opYoY == null || stock.gmYoY == null) return false;
+      if (stock.revYoY <= 0) return false;
+      if (stock.opYoY <= stock.revYoY) return false;
+      if (stock.gmYoY < 0) return false;
+      // 當季 op > 0 用 opYoY 存在代理:若當季 op<=0,pipeline 的 opYoY 邏輯不會產出正常值
+      return true;
+    }
+  },
 };
-const sortableKeys = new Set(['id', 'name', 'industry', 'rev', 'revYoY', 'om', 'score', 'vis']);
+// v3.4: 所有固定 + 動態欄位皆可排序(sortableKeys 直接涵蓋所有可能 key)
+const sortableKeys = new Set(['id', 'name', 'industry', 'rev', 'revYoY', 'gm', 'om', 'nm', 'score', 'clYoY', 'clRatio', 'gc']);
 const perPage = 25;
 const THRESHOLD_TO_YI = 50000;
 
@@ -707,15 +745,25 @@ function debounce(fn, wait) {
 }
 
 function filterStocks() {
-  const clFiltersActive = isRangeActive('clYoY'); // v3.4: vis 已拿掉
+  // v3.4 P1: clRatio 特殊 · 下限 >0 時隱含排除 hasCL=false;下限 =0 時,無 CL 標的視為 clRatio=0 保留
+  const clYoYActive = isRangeActive('clYoY');
+  const clRatioActive = isRangeActive('clRatio');
+  const clRatioExcludeNoCL = clRatioActive && state.ranges['clRatio'][0] > 0;
+  const clFiltersActive = clYoYActive || clRatioExcludeNoCL;
   const rows = scannerStocks.map(stock => ({ ...stock, score: healthScore(stock) })).filter(stock => {
     if (state.industry !== 'all' && stock.industry !== state.industry) return false;
     if (state.market !== 'all' && stock.market !== state.market) return false;
     if (clFiltersActive && !stock.hasCL) return false;
     for (const key of Object.keys(rangeDefs)) {
       if (!isRangeActive(key)) continue;
-      const value = stock[key];
-      if (value == null || value < state.ranges[key][0] || value > state.ranges[key][1]) return false;
+      let value = stock[key];
+      // v3.4 P1: clRatio 特殊 · hasCL=false 時視為 0(僅當下限 =0 才走到這裡,由 clRatioExcludeNoCL 邏輯保證)
+      if (key === 'clRatio' && !stock.hasCL) value = 0;
+      if (value == null) return false;
+      const [low, high] = state.ranges[key];
+      // v3.4 P1: clRatio 上限 =200 視為「≥200」無上限(涵蓋建材/設備 300-500% 極端值)
+      const highUnlimited = key === 'clRatio' && high >= 200;
+      if (value < low || (!highUnlimited && value > high)) return false;
     }
     if (state.gc && !stock.gc) return false;
     // v3.4: 複選模板 AND 交集 · 每個選中的模板 rules 都必須 pass
@@ -769,21 +817,75 @@ function renderControls() {
   document.getElementById('mobileFilterButton').textContent = `篩選 (${count})`;
 }
 
-const columnDefs = [
-  { key: 'id', label: '股號', tip: '股票代號。點擊欄位標題可依代號排序。' },
-  { key: 'name', label: '名稱', tip: '公司簡稱。點擊欄位標題可依文字排序。' },
-  { key: 'industry', label: '產業', tip: '公司所屬的單層產業分類。' },
-  { key: 'rev', label: '當季營收', tip: '當季已認列的營業收入，金額單位統一顯示於欄位標題。' },
-  { key: 'revYoY', label: '營收 YoY', tip: '相較去年同期營收的變化百分比。>15% 為強勁成長。' },
-  { key: 'om', label: '營益率', tip: '營業利益 ÷ 營收。反映本業獲利能力。≥8% 綠 / 3–8% 黃 / <3% 紅。' },
-  { key: 'score', label: '健康度總分', tip: '4 核心指標(毛利率、營益率、淨利率、業外占淨利)綠 2 分 / 黃 1 分 / 紅 0 分加總。0–8 分。≥6 綠 / 3–5.9 黃 / <3 紅。' },
-  // v3.4: 拿掉「能見度」欄
+// v3.4 P0: 固定 8 欄(永遠顯示)+ 動態 4 欄候選(觸發時右側展開)
+const fixedColumns = [
+  { key: 'id',       label: '股號',       tip: '股票代號。點擊欄位標題可依代號排序。' },
+  { key: 'name',     label: '名稱',       tip: '公司簡稱。點擊欄位標題可依文字排序。' },
+  { key: 'industry', label: '產業',       tip: '公司所屬的單層產業分類。' },
+  { key: 'rev',      label: '當季營收',   tip: '當季已認列的營業收入，金額單位統一顯示於欄位標題。' },
+  { key: 'revYoY',   label: '營收 YoY',   tip: '相較去年同期營收的變化百分比。>15% 為強勁成長。' },
+  { key: 'gm',       label: '毛利率',     tip: '毛利 ÷ 營收。反映產品定價力與成本控制。≥25% 綠 / 15–25% 黃 / <15% 紅。' },
+  { key: 'om',       label: '營益率',     tip: '營業利益 ÷ 營收。反映本業獲利能力。≥8% 綠 / 3–8% 黃 / <3% 紅。' },
+  { key: 'score',    label: '健康度總分', tip: '4 核心指標(毛利率、營益率、淨利率、業外占淨利)綠 2 分 / 黃 1 分 / 紅 0 分加總。0–8 分。≥6 綠 / 3–5.9 黃 / <3 紅。' },
 ];
+const dynamicColumnCandidates = [
+  {
+    key: 'nm', label: '淨利率', tip: '淨利 ÷ 營收。≥5% 綠 / 0–5% 黃 / <0% 紅。',
+    active: () => isRangeActive('nm') || state.templates.includes('core-stable') || state.templates.includes('three-up')
+  },
+  {
+    key: 'clYoY', label: '合約負債 YoY', tip: '合約負債期末相較去年同期的變化。>30% 為訂單池強勁累積,<0% 為訂單轉弱。',
+    active: () => isRangeActive('clYoY') || state.templates.includes('order-pile-up')
+  },
+  {
+    key: 'clRatio', label: '合約負債/股本比', tip: '合約負債 ÷ 普通股股本 × 100%。反映訂單池相對股本規模的倍數。',
+    active: () => isRangeActive('clRatio') || state.templates.includes('order-pile-up')
+  },
+  {
+    key: 'gc', label: '動能狀態', tip: '近 30 天內 3MA 由下穿越 12MA(黃金交叉),為月營收動能轉正訊號。',
+    active: () => state.gc || state.templates.includes('momentum-turn')
+  },
+];
+function getActiveColumns() {
+  return [...fixedColumns, ...dynamicColumnCandidates.filter(c => c.active())];
+}
 function sortMark(key) { return state.sortKey === key ? (state.sortDir === 'asc' ? '↑' : '↓') : ''; }
 function navigateToStock(id, event) {
   const url = `stock.html?id=${id}`;
   if (event?.metaKey || event?.ctrlKey) window.open(url, '_blank');
   else location.href = url;
+}
+// v3.4 P0: 桌面表格 cell render(依 column key 分派)
+function renderCell(stock, column, revUnit) {
+  const v = stock[column.key];
+  switch (column.key) {
+    case 'id':       return `<td class="stock-id">${v}</td>`;
+    case 'name':     return `<td>${v}</td>`;
+    case 'industry': return `<td class="stock-industry">${industries[stock.industry]}</td>`;
+    case 'rev':      return `<td>${formatMoney(v, revUnit)}</td>`;
+    case 'revYoY':
+    case 'clYoY':    return `<td class="${v > 0 ? 'value-positive' : v < 0 ? 'value-negative' : ''}">${v == null ? '—' : formatSigned(v)}</td>`;
+    case 'gm':
+    case 'om':
+    case 'nm':
+    case 'clRatio':  return `<td>${v == null ? '—' : v.toFixed(1) + '%'}</td>`;
+    case 'gc':       return `<td>${v ? '<span class="momentum-chip on">✓ 黃金交叉</span>' : '<span class="momentum-chip off">—</span>'}</td>`;
+    case 'score':    return `<td><span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span></td>`;
+    default:         return `<td>—</td>`;
+  }
+}
+// v3.4 P0: 手機版 footer 動態 chip render
+function renderMobileChip(stock, column) {
+  const v = stock[column.key];
+  if (column.key === 'gc') {
+    return v ? '<span class="mobile-chip on">✓ 黃金交叉</span>' : '';  // 未達成時該卡片不顯示 gc chip
+  }
+  if (v == null) return `<span class="mobile-chip">${column.label} —</span>`;
+  if (column.key === 'clYoY') {
+    const cls = v > 0 ? 'value-positive' : v < 0 ? 'value-negative' : '';
+    return `<span class="mobile-chip ${cls}">${column.label} ${formatSigned(v)}</span>`;
+  }
+  return `<span class="mobile-chip">${column.label} ${v.toFixed(1)}%</span>`;
 }
 function renderResults() {
   filteredList = filterStocks();
@@ -793,20 +895,41 @@ function renderResults() {
   const rows = filteredList.slice(start, start + perPage);
   const maxRevenue = filteredList.length ? Math.max(...filteredList.map(stock => stock.rev)) : Math.max(...scannerStocks.map(stock => stock.rev));
   const revUnit = pickUnit(maxRevenue);
-  document.getElementById('resultsHead').innerHTML = `<tr>${columnDefs.map(column => {
-    const unit = column.key === 'rev' ? `<span class="col-unit">(${revUnit.unit})</span>` : column.key === 'vis' ? '<span class="col-unit">(月)</span>' : '';
+  const columns = getActiveColumns();
+
+  // 桌面版 · 動態表頭
+  document.getElementById('resultsHead').innerHTML = `<tr>${columns.map(column => {
+    const unit = column.key === 'rev' ? `<span class="col-unit">(${revUnit.unit})</span>` : '';
     return `<th><button class="sort-btn ${state.sortKey === column.key ? 'active' : ''}" data-sort="${column.key}" data-tooltip="${column.tip}">${column.label}${unit}<span class="sort-mark">${sortMark(column.key)}</span></button></th>`;
   }).join('')}</tr>`;
-  document.getElementById('resultsBody').innerHTML = rows.map(stock => `<tr data-stock-id="${stock.id}" tabindex="0" aria-label="查看 ${stock.id} ${stock.name}">
-    <td class="stock-id">${stock.id}</td><td>${stock.name}</td><td class="stock-industry">${industries[stock.industry]}</td>
-    <td>${formatMoney(stock.rev, revUnit)}</td><td class="${stock.revYoY > 0 ? 'value-positive' : stock.revYoY < 0 ? 'value-negative' : ''}">${formatSigned(stock.revYoY)}</td>
-    <td>${stock.om == null ? '—' : stock.om.toFixed(1) + '%'}</td><td><span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span></td>
-  </tr>`).join('');
-  document.getElementById('mobileResults').innerHTML = rows.map(stock => `<a class="stock-card" href="stock.html?id=${stock.id}">
-    <div class="stock-card-head"><span class="stock-card-title">${stock.id} · ${stock.name}</span><span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span></div>
-    <div class="stock-card-industry">${industries[stock.industry]}</div>
-    <div class="stock-card-grid"><span>當季營收<b>${formatMoney(stock.rev, revUnit)} ${revUnit.unit}</b></span><span>YoY<b class="${stock.revYoY > 0 ? 'value-positive' : stock.revYoY < 0 ? 'value-negative' : ''}">${formatSigned(stock.revYoY)}</b></span><span>營益率<b>${stock.om == null ? '—' : stock.om.toFixed(1) + '%'}</b></span></div>
-  </a>`).join('');
+
+  // 桌面版 · 動態 tbody
+  document.getElementById('resultsBody').innerHTML = rows.map(stock =>
+    `<tr data-stock-id="${stock.id}" tabindex="0" aria-label="查看 ${stock.id} ${stock.name}">${columns.map(column => renderCell(stock, column, revUnit)).join('')}</tr>`
+  ).join('');
+
+  // 手機版 · header + 2x2 grid + footer dynamic chips
+  const dynamicActive = dynamicColumnCandidates.filter(c => c.active());
+  document.getElementById('mobileResults').innerHTML = rows.map(stock => {
+    const footerChips = dynamicActive.map(c => renderMobileChip(stock, c)).filter(Boolean).join('');
+    return `<a class="stock-card" href="stock.html?id=${stock.id}">
+      <div class="stock-card-head">
+        <div class="stock-card-head-main">
+          <span class="stock-card-title">${stock.id} · ${stock.name}</span>
+          <div class="stock-card-industry">${industries[stock.industry]}</div>
+        </div>
+        <span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span>
+      </div>
+      <div class="stock-card-grid">
+        <span>當季營收<b>${formatMoney(stock.rev, revUnit)} ${revUnit.unit}</b></span>
+        <span>營收 YoY<b class="${stock.revYoY > 0 ? 'value-positive' : stock.revYoY < 0 ? 'value-negative' : ''}">${formatSigned(stock.revYoY)}</b></span>
+        <span>毛利率<b>${stock.gm == null ? '—' : stock.gm.toFixed(1) + '%'}</b></span>
+        <span>營益率<b>${stock.om == null ? '—' : stock.om.toFixed(1) + '%'}</b></span>
+      </div>
+      ${footerChips ? `<div class="stock-card-footer">${footerChips}</div>` : ''}
+    </a>`;
+  }).join('');
+
   const empty = filteredList.length === 0;
   document.getElementById('emptyState').classList.toggle('show', empty);
   document.getElementById('tableScroll').style.display = empty ? 'none' : '';
@@ -823,7 +946,11 @@ function renderPager(pages) {
   document.getElementById('pager').innerHTML = buttons.join('');
 }
 function updateHitStat() {
-  const clFiltersActive = isRangeActive('clYoY'); // v3.4: vis 已拿掉
+  // v3.4 P1: clRatio 下限 >0 時也算 clFiltersActive
+  const clYoYActive = isRangeActive('clYoY');
+  const clRatioActive = isRangeActive('clRatio');
+  const clRatioExcludeNoCL = clRatioActive && state.ranges['clRatio'][0] > 0;
+  const clFiltersActive = clYoYActive || clRatioExcludeNoCL;
   const denominator = clFiltersActive ? scannerStocks.filter(stock => stock.hasCL).length : scannerStocks.length;
   const rate = denominator ? filteredList.length / denominator * 100 : 0;
   document.getElementById('hitStat').textContent = `命中 ${filteredList.length} 檔 / 全市場 ${denominator} 檔 (${rate.toFixed(1)}%)`;
