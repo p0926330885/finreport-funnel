@@ -14,7 +14,7 @@ from typing import Optional
 
 import pandas as pd
 
-from . import config, ingest
+from . import config, ingest, models
 from .finmind_client import FinMindClient
 
 log = logging.getLogger(__name__)
@@ -248,12 +248,20 @@ _MATCHERS = [
 ]
 
 
-def detect_mode(now, yoy):
-    """依 section 3.2 優先序判定. 返回 (code, name) 或 (None, None)."""
+def detect_mode(now, yoy, flags=None):
+    """依 section 3.2 優先序判定. 返回 (code, name) 或 (None, None).
+    v3.5: 加 flags 參數 · M06 觸發改讀 flags['opLevRelease'](單一真理源) ·
+          其他 mode 保持原 match_mXX 邏輯不變 · 文字模板一字不動。
+    """
     if not yoy:
         return None, None
     for code, name, fn in _MATCHERS:
         try:
+            # v3.5: M06 觸發改讀 compute_all_flags 產出的 flag(架構統一)
+            if code == 'M06':
+                if flags and flags.get('opLevRelease'):
+                    return code, name
+                continue
             if fn(now, yoy):
                 return code, name
         except Exception:  # 判定失敗當作未命中,不 raise
@@ -417,8 +425,15 @@ def _build_gm_insight(now, yoy, dedup=False):
             'mode_code':None,'mode_name':None,'text':text}
 
 
-def _build_opgm_insight(now, yoy, dedup=False):
-    """s03: 毛利轉化率評語."""
+def _build_opgm_insight(now, yoy, dedup=False, signal=None):
+    """s03: 毛利轉化率評語.
+    v3.5: 加 signal 參數(來自 models.compute_s03_signal · 個股自我歷史基準)。
+          文字模板 4 段完全不動,signal 反向決定選哪段(貫徹單一真理源):
+          - signal='red'    → 段 4 (侵蝕過重)
+          - signal='green'  → 段 1 或 段 2 (依 opgm 高低)
+          - signal='yellow' → 段 3 (偏高關注)
+          - signal=None (fallback) → 保留原 4 段閾值邏輯(向後相容)
+    """
     op = now.get('opgm')
     if op is None:
         return {'id':'s03','kind':'supporting','tone':'amber',
@@ -428,18 +443,34 @@ def _build_opgm_insight(now, yoy, dedup=False):
         return {'id':'s03','kind':'supporting','tone':'amber',
                 'mode_code':None,'mode_name':None,
                 'text': f"毛利轉化率當前 {op:.1f}%,詳見主判讀。"}
-    if op >= 70:
-        text = f"毛利轉化率 {op:.1f}%,營業費用僅吃掉 {eaten:.1f}% 毛利。費用控制優異,毛利高效轉化為營業利益。"
+
+    # v3.5: signal 反向選段(文字內容一字不改,只換選段邏輯)
+    if signal == 'red':
+        text = f"毛利轉化率 {op:.1f}%,營業費用吃掉 {eaten:.1f}% 毛利。費用侵蝕過重,本業轉化效率不佳。"
+        tone = 'red'
+    elif signal == 'green':
+        if op >= 70:
+            text = f"毛利轉化率 {op:.1f}%,營業費用僅吃掉 {eaten:.1f}% 毛利。費用控制優異,毛利高效轉化為營業利益。"
+        else:
+            text = f"毛利轉化率 {op:.1f}%,營業費用吃掉 {eaten:.1f}% 毛利。費用控制良好,毛利多能轉化為營業利益。"
         tone = 'mint'
-    elif op >= 50:
-        text = f"毛利轉化率 {op:.1f}%,營業費用吃掉 {eaten:.1f}% 毛利。費用控制良好,毛利多能轉化為營業利益。"
-        tone = 'mint'
-    elif op >= 30:
+    elif signal == 'yellow':
         text = f"毛利轉化率 {op:.1f}%,營業費用吃掉 {eaten:.1f}% 毛利。費用比例偏高,關注是否結構性擴張。"
         tone = 'amber'
     else:
-        text = f"毛利轉化率 {op:.1f}%,營業費用吃掉 {eaten:.1f}% 毛利。費用侵蝕過重,本業轉化效率不佳。"
-        tone = 'red'
+        # signal=None fallback:保留原 4 段絕對閾值邏輯(向後相容)
+        if op >= 70:
+            text = f"毛利轉化率 {op:.1f}%,營業費用僅吃掉 {eaten:.1f}% 毛利。費用控制優異,毛利高效轉化為營業利益。"
+            tone = 'mint'
+        elif op >= 50:
+            text = f"毛利轉化率 {op:.1f}%,營業費用吃掉 {eaten:.1f}% 毛利。費用控制良好,毛利多能轉化為營業利益。"
+            tone = 'mint'
+        elif op >= 30:
+            text = f"毛利轉化率 {op:.1f}%,營業費用吃掉 {eaten:.1f}% 毛利。費用比例偏高,關注是否結構性擴張。"
+            tone = 'amber'
+        else:
+            text = f"毛利轉化率 {op:.1f}%,營業費用吃掉 {eaten:.1f}% 毛利。費用侵蝕過重,本業轉化效率不佳。"
+            tone = 'red'
     return {'id':'s03','kind':'supporting','tone':tone,
             'mode_code':None,'mode_name':None,'text':text}
 
@@ -475,7 +506,7 @@ def _build_noi_insight(now, dedup=False):
 # 主入口: insights_v3
 # ============================================================
 
-def insights_v3(quarterly: list[dict], stock_name: str, has_cl: bool = False) -> list[dict]:
+def insights_v3(quarterly: list[dict], stock_name: str, has_cl: bool = False, gc: bool = False) -> list[dict]:
     """
     產生 4~5 條 insights.
 
@@ -502,8 +533,11 @@ def insights_v3(quarterly: list[dict], stock_name: str, has_cl: bool = False) ->
     ly_d  = _compute_derived(quarterly[-5]) if len(quarterly) >= 5 else None
     yoy   = _compute_yoy(now_d, ly_d)
 
-    # 判定模式
-    code, name = detect_mode(now_d, yoy)
+    # v3.5: 單一真理源 · 一次算完所有 flag + s03Signal · 供 detect_mode 與 s03 共用
+    flags = models.compute_all_flags(quarterly, has_cl, gc)
+
+    # 判定模式(M06 觸發改讀 flags['opLevRelease'])
+    code, name = detect_mode(now_d, yoy, flags=flags)
 
     # 主判讀 s01
     if code:
@@ -533,7 +567,8 @@ def insights_v3(quarterly: list[dict], stock_name: str, has_cl: bool = False) ->
     dedup_noi  = code in ('M01', 'M02')
 
     s02 = _build_gm_insight(now_d, yoy, dedup=dedup_gm)
-    s03 = _build_opgm_insight(now_d, yoy, dedup=dedup_opgm)
+    # v3.5: s03 tone/選段改依 signal(單一真理源)· 文字內容一字不動
+    s03 = _build_opgm_insight(now_d, yoy, dedup=dedup_opgm, signal=flags.get('s03Signal'))
     s04 = _build_noi_insight(now_d, dedup=dedup_noi)
 
     result = [s01, s02, s03, s04]
@@ -791,8 +826,10 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
 
     # v3: 產生自動判讀 (SPEC-insights-v3.1)
     # v3.4: 傳 has_cl,啟用時追加 s05 CL 佔股本比敘述
+    # v3.5: 先算 gc(單一真理源之一,供 momentumTurn flag)
+    gc_flag = _detect_golden_cross(monthly)
     try:
-        insights = insights_v3(quarterly, name, has_cl=has_cl)
+        insights = insights_v3(quarterly, name, has_cl=has_cl, gc=gc_flag)
     except Exception as exc:
         log.warning("insights_v3 failed for %s: %s", stock_id, exc)
         insights = []
@@ -895,6 +932,10 @@ def build_scanner_row(detail: dict) -> Optional[dict]:
         gm_year_ago = yr_ago["gp"] / yr_ago["rev"] * 100
     gmYoY = (gm - gm_year_ago) if gm is not None and gm_year_ago is not None else None
 
+    # v3.5: 單一真理源 · 一次算出所有策略 flag + s03 燈號(供前端 5 個策略模板純讀)
+    #       Scanner 前端徹底降級為 View · 不再寫任何業務判定邏輯
+    flags = models.compute_all_flags(q, detail.get("hasCL", False), gc)
+
     return {
         "id":       detail["id"],
         "name":     detail["name"],
@@ -915,7 +956,15 @@ def build_scanner_row(detail: dict) -> Optional[dict]:
         "clYoY":    round(clYoY, 1)  if clYoY  is not None else None,
         # v3.4 P1: clRatio 加入 scanner_index 供 sidebar slider 與動態欄位使用
         "clRatio":  round(clRatio, 1) if clRatio is not None else None,
-        # v3.4 P2: opYoY + gmYoY 加入 scanner_index 供「營運槓桿釋放」模板使用
+        # v3.4 P2: opYoY + gmYoY 加入 scanner_index (仍保留供其他統計 / debug 用)
         "opYoY":    round(opYoY, 1)  if opYoY  is not None else None,
         "gmYoY":    round(gmYoY, 1)  if gmYoY  is not None else None,
+        # v3.5: 策略 flag(單一真理源產出 · 前端純讀無業務邏輯)
+        "opLevRelease": flags["opLevRelease"],
+        "opLevType":    flags["opLevType"],
+        "coreStable":   flags["coreStable"],
+        "orderPileUp":  flags["orderPileUp"],
+        "threeUp":      flags["threeUp"],
+        "momentumTurn": flags["momentumTurn"],
+        "s03Signal":    flags["s03Signal"],
     }
