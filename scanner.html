@@ -615,41 +615,29 @@ const rangeDefs = {
   // v3.4 P1: 合約負債佔股本比 · 上限 200 代表「≥200」無上限(建材/設備常見 300-500%)
   clRatio: { label: '合約負債/股本比', min: 0, max: 200, step: 1, unit: '%' },
 };
-// v3.4: 策略模板改複選架構
-// 每個模板獨立 rules function,不再覆蓋 sidebar slider(sidebar/模板兩者最後 AND 交集)
+// v3.5: 策略模板全數降級為純 View · 只讀後端 flag · 零業務邏輯
+// 所有觸發條件的判定邏輯集中在 pipeline/models.py(單一真理源)
+// 個股頁 M06 觸發與此處 opLevRelease 呼叫同一支 Python 函式,前後端 100% 語意閉環
 const templates = {
   'order-pile-up': {
     label: '訂單池累積、認列跟上',
-    rules: stock => stock.hasCL && (stock.clYoY ?? -Infinity) >= 30 && (stock.revYoY ?? -Infinity) >= 15
+    rules: stock => stock.orderPileUp === true
   },
   'core-stable': {
     label: '本業獲利穩健',
-    rules: stock => (stock.om ?? -Infinity) >= 8 && Math.abs(stock.noiRatio ?? 0) < 25
+    rules: stock => stock.coreStable === true
   },
   'three-up': {
     label: '三率同升',
-    rules: stock => (stock.gmQoQ ?? -1) >= 0 && (stock.omQoQ ?? -1) >= 0 && (stock.nmQoQ ?? -1) >= 0
+    rules: stock => stock.threeUp === true
   },
   'momentum-turn': {
     label: '動能轉正',
-    rules: stock => !!stock.gc
+    rules: stock => stock.momentumTurn === true
   },
-  // v3.4 P2: 營運槓桿釋放 · 純粹狀態版 · 無門檻魔數,強度交給 slider
-  //   1) revYoY > 0     · 排除衰退期
-  //   2) opYoY > revYoY · 營益增速跑贏營收增速(核心)
-  //   3) gmYoY >= 0     · 排除削價競爭(pp 差值)
-  //   4) 當季 op > 0    · 排除虧轉盈基期除法失真(用 opYoY != null 代理判斷)
-  //   null 值嚴格排除
   'operating-leverage': {
     label: '營運槓桿釋放',
-    rules: stock => {
-      if (stock.revYoY == null || stock.opYoY == null || stock.gmYoY == null) return false;
-      if (stock.revYoY <= 0) return false;
-      if (stock.opYoY <= stock.revYoY) return false;
-      if (stock.gmYoY < 0) return false;
-      // 當季 op > 0 用 opYoY 存在代理:若當季 op<=0,pipeline 的 opYoY 邏輯不會產出正常值
-      return true;
-    }
+    rules: stock => stock.opLevRelease === true
   },
 };
 // v3.4: 所有固定 + 動態欄位皆可排序(sortableKeys 直接涵蓋所有可能 key)
