@@ -729,11 +729,15 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
 
     # 內部 helper: 安全百分比變化 (今 vs 過去), 若基期 ~0 / 缺值 / NaN 返回 None
     def _y(now, past):
+        """v3.5.1: 遵循「財務指標判讀規範 §1」· 分母強制取絕對值,
+        避免當基期為負時公式反號(例:台塑 op 從 -1563 → +2880,舊公式產出 -284.3%,新公式正確為 +284.3%)。
+        分母 |past| < 0.01 時視為分母失真,回傳 None(前端可依 lowBase 旗標顯示「基期偏低」標籤)。
+        """
         n = _n(now, 4)
         p = _n(past, 4)
         if n is None or p is None or abs(p) < 0.01:
             return None
-        return round((n / p - 1) * 100, 1)
+        return round((n - p) / abs(p) * 100, 1)
 
     # 先建 full_quarterly (24 筆) 含各 YoY/QoQ
     full_quarterly = []
@@ -967,4 +971,7 @@ def build_scanner_row(detail: dict) -> Optional[dict]:
         "threeUp":      flags["threeUp"],
         "momentumTurn": flags["momentumTurn"],
         "s03Signal":    flags["s03Signal"],
+        # v3.5.1: UI 標籤旗標(消除視覺矛盾 · 遵循「財務指標判讀規範 §1 邊界定義」)
+        "turnedPositive": flags["turnedPositive"],
+        "lowBase":        flags["lowBase"],
     }
