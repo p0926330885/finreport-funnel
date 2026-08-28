@@ -303,6 +303,12 @@ a { color: inherit; text-decoration: none; }
 .momentum-chip { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; font-family: var(--font-ui); }
 .momentum-chip.on { background: rgba(64, 190, 130, 0.18); color: #6dd4a4; border: 1px solid rgba(64, 190, 130, 0.35); }
 .momentum-chip.off { color: var(--text-dim); font-family: var(--font-num); }
+/* v3.5.1: 名稱旁小標籤 · 「轉虧為盈」(mint) / 「基期偏低」(amber) · 遵循「§1 邊界定義」*/
+.stock-badge { display: inline-block; padding: 1px 6px; margin-left: 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 500; font-family: var(--font-ui); letter-spacing: 0.02em;
+  vertical-align: 2px; white-space: nowrap; }
+.stock-badge.turned  { background: var(--mint-dim);  color: var(--mint);  border: 1px solid var(--mint-line); }
+.stock-badge.lowbase { background: var(--amber-dim); color: var(--amber); border: 1px solid var(--amber-line); }
 /* v3.4 P0: 手機卡片 · header 主資訊左側區塊(對齊產業於股號下方) */
 .stock-card-head-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 /* v3.4 P0: 手機卡片 · footer 動態指標 chip 區 */
@@ -878,12 +884,24 @@ function renderCell(stock, column, revUnit) {
   const v = stock[column.key];
   switch (column.key) {
     case 'id':       return `<td class="stock-id">${v}</td>`;
-    case 'name':     return `<td>${v}</td>`;
+    case 'name':     {
+      // v3.5.1: 名稱後加小標籤 · turnedPositive 優先於 lowBase(轉虧為盈更具訊號價值)
+      let badge = '';
+      if (stock.turnedPositive === true)      badge = '<span class="stock-badge turned">⚡ 轉虧為盈</span>';
+      else if (stock.lowBase === true)        badge = '<span class="stock-badge lowbase">⚠ 基期偏低</span>';
+      return `<td>${v}${badge}</td>`;
+    }
     case 'industry': return `<td class="stock-industry">${industries[stock.industry]}</td>`;
     case 'rev':      return `<td>${formatMoney(v, revUnit)}</td>`;
     case 'revYoY':
-    case 'clYoY':
-    case 'opYoY':    return `<td class="${v > 0 ? 'value-positive' : v < 0 ? 'value-negative' : ''}">${v == null ? '—' : formatSigned(v)}</td>`;
+    case 'clYoY':    return `<td class="${v > 0 ? 'value-positive' : v < 0 ? 'value-negative' : ''}">${v == null ? '—' : formatSigned(v)}</td>`;
+    case 'opYoY':    {
+      // v3.5.1: 若 lowBase 為 true 或 opYoY 為 null(分母失真)· 顯示標籤而非誤導數字
+      if (stock.lowBase === true || v == null) {
+        return `<td><span class="stock-badge lowbase">基期偏低</span></td>`;
+      }
+      return `<td class="${v > 0 ? 'value-positive' : v < 0 ? 'value-negative' : ''}">${formatSigned(v)}</td>`;
+    }
     case 'gm':
     case 'om':
     case 'nm':
@@ -899,8 +917,18 @@ function renderMobileChip(stock, column) {
   if (column.key === 'gc') {
     return v ? '<span class="mobile-chip on">✓ 黃金交叉</span>' : '';  // 未達成時該卡片不顯示 gc chip
   }
-  if (v == null) return `<span class="mobile-chip">${column.label} —</span>`;
+  if (v == null) {
+    // v3.5.1: opYoY 分母失真時顯示標籤而非「—」
+    if (column.key === 'opYoY' && stock.lowBase === true) {
+      return `<span class="mobile-chip" style="color:var(--amber)">${column.label} 基期偏低</span>`;
+    }
+    return `<span class="mobile-chip">${column.label} —</span>`;
+  }
   if (column.key === 'clYoY' || column.key === 'opYoY') {
+    // v3.5.1: 即使有值,若被標記 lowBase 也優先顯示標籤(如去年 op 極小的邊界)
+    if (column.key === 'opYoY' && stock.lowBase === true) {
+      return `<span class="mobile-chip" style="color:var(--amber)">${column.label} 基期偏低</span>`;
+    }
     const cls = v > 0 ? 'value-positive' : v < 0 ? 'value-negative' : '';
     return `<span class="mobile-chip ${cls}">${column.label} ${formatSigned(v)}</span>`;
   }
