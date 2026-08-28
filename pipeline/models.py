@@ -111,19 +111,29 @@ def _match_type2_pure_expansion(rev_yoy, gm_delta, op_yoy) -> bool:
             and op_yoy > 10.0)
 
 
-def _match_type3_turnaround(rev_yoy, op_yoy, cur_op, ly_op,
+def _match_type3_turnaround(rev_yoy, op_yoy, cur_op, cur_rev, ly_op,
                              opgm, opgm_prev4q_mean) -> bool:
     """型態 3 · 轉機修復 (景氣循環股走出谷底的典型)
     revYoY 溫和 · 營益暴增 (由負轉正 or op_yoy > 100%) · OPGM 反彈幅度 >= 前4Q平均 * 1.3
-    * 由負轉正時跳過 op_yoy 分母失真計算,直接以 turned_positive 判定
+    
+    v3.5.1 (B1 最嚴):遵循「財務指標判讀規範 §2」·
+    turned_positive 嚴格條件:
+        1. ly_op < 0 (**排除基期為 0 的雜訊**,強制去年真虧損)
+        2. cur_op > cur_rev * 0.02 (當季 OM ≥ 2%,確保實質獲利厚度)
+    這樣才能排除「0 → 10」這種微弱訊號,只保留台塑/中鋼這類真轉機股。
     """
     if not _all_not_none(rev_yoy, cur_op, opgm, opgm_prev4q_mean):
         return False
     # 條件 1:營收溫和成長 (未見暴衝,排除已在型態 1/2 的情境)
     if not (0 < rev_yoy < 15):
         return False
-    # 條件 2:營益暴增
-    turned_positive = (ly_op is not None and ly_op <= 0 and cur_op > 0)
+    # 條件 2:營益暴增(B1 最嚴)
+    # 由負轉正需同時滿足:去年真虧損 + 當季 OM ≥ 2%(實質獲利厚度)
+    turned_positive = (
+        ly_op is not None and ly_op < 0
+        and cur_rev is not None and cur_rev > 0
+        and cur_op > cur_rev * 0.02
+    )
     surging = (op_yoy is not None and op_yoy > 100)
     if not (turned_positive or surging):
         return False
@@ -186,7 +196,8 @@ def compute_op_lev_release(cur_q: dict, prev_q: Optional[dict],
     # 3 型態依序檢測 · 命中則直接回傳 (優先權: turnaround > volume > pure)
     # 註:轉機修復優先權高,因由負轉正是最強訊號
     ly_op = ly_d.get('op') if ly_d else None
-    if _match_type3_turnaround(rev_yoy, op_yoy, cur_op, ly_op, opgm, opgm_prev4q_mean):
+    cur_rev = now_d.get('rev')
+    if _match_type3_turnaround(rev_yoy, op_yoy, cur_op, cur_rev, ly_op, opgm, opgm_prev4q_mean):
         return (True, "turnaround")
     if _match_type1_volume_expansion(rev_yoy, gp_yoy, gm_delta, op_yoy):
         return (True, "volume")
@@ -371,6 +382,7 @@ def compute_all_flags(quarterly: List[dict], has_cl: bool,
             "coreStable": False, "orderPileUp": False,
             "threeUp": False, "momentumTurn": bool(gc),
             "s03Signal": "yellow",
+            "turnedPositive": False, "lowBase": False,
         }
     
     cur_q = quarterly[-1]
@@ -410,6 +422,22 @@ def compute_all_flags(quarterly: List[dict], has_cl: bool,
     s03_signal = compute_s03_signal(
         cur_q, prev_q, opgm_self_median, history_quarter_count)
     
+    # v3.5.1: 新增 UI 標籤旗標(遵循「財務指標判讀規範 §1 邊界定義」)
+    # turnedPositive: 去年同期 op<0 且當季 op>0 · 用於前端「轉虧為盈」標籤
+    #   (語意寬於 turnaround type · 只判 UI 標籤 · 不影響選股嚴謹度)
+    # lowBase: 去年同期 op 絕對值極小(|ly_op| < 1)或當季 opYoY 為 None
+    #   用於前端「基期偏低」標籤 · 消除使用者對「-2561%」怪值的困惑
+    ly_op_val = _derive(ly_q).get('op') if ly_q else None
+    cur_op_val = _derive(cur_q).get('op')
+    turned_positive_label = bool(
+        ly_op_val is not None and ly_op_val < 0
+        and cur_op_val is not None and cur_op_val > 0
+    )
+    low_base_label = bool(
+        cur_q.get('opYoY') is None  # 修好公式後,分母失真自然為 None
+        or (ly_op_val is not None and abs(ly_op_val) < 1)  # 或去年基期絕對值極小
+    )
+    
     return {
         "opLevRelease": op_lev_release,
         "opLevType":    op_lev_type,
@@ -418,6 +446,9 @@ def compute_all_flags(quarterly: List[dict], has_cl: bool,
         "threeUp":      three_up,
         "momentumTurn": momentum_turn,
         "s03Signal":    s03_signal,
+        # v3.5.1: UI 標籤(獨立於選股 flag · 供前端渲染「轉虧為盈」/「基期偏低」)
+        "turnedPositive": turned_positive_label,
+        "lowBase":        low_base_label,
     }
 
 
