@@ -891,7 +891,7 @@ function renderCell(stock, column, revUnit) {
       else if (stock.lowBase === true)        badge = '<span class="stock-badge lowbase">⚠ 基期偏低</span>';
       return `<td>${v}${badge}</td>`;
     }
-    case 'industry': return `<td class="stock-industry">${industries[stock.industry]}</td>`;
+    case 'industry': return `<td class="stock-industry">${industries[stock.industry] || stock.industry || '—'}</td>`;
     case 'rev':      return `<td>${formatMoney(v, revUnit)}</td>`;
     case 'revYoY':
     case 'clYoY':    return `<td class="${v > 0 ? 'value-positive' : v < 0 ? 'value-negative' : ''}">${v == null ? '—' : formatSigned(v)}</td>`;
@@ -963,7 +963,7 @@ function renderResults() {
       <div class="stock-card-head">
         <div class="stock-card-head-main">
           <span class="stock-card-title">${stock.id} · ${stock.name}</span>
-          <div class="stock-card-industry">${industries[stock.industry]}</div>
+          <div class="stock-card-industry">${industries[stock.industry] || stock.industry || '—'}</div>
         </div>
         <span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span>
       </div>
