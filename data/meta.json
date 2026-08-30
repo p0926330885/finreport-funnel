@@ -1,1 +1,1 @@
-{"last_full_build":"2026-08-30T16:06:00+08:00","universe_size":4308,"targets":1749,"target_desc":"explicit 1749 stocks","built_ok":1749,"built_fail":0,"scanner_size":1749,"backfill_status":"incremental","data_freshness":{"quarterly":"2026/2Q","monthly":null}}
+{"last_full_build":"2026-08-31T07:51:53+08:00","universe_size":4312,"targets":306,"target_desc":"batch 5/7 (306/2137 stocks)","built_ok":301,"built_fail":5,"scanner_size":2047,"backfill_status":"complete","data_freshness":{"quarterly":"2026/2Q","monthly":null},"last_batch":5,"batch_count":7}
