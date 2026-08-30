@@ -1,8 +1,50 @@
 """
-pipeline/models.py · v3.5 · 單一真理源 (Single Source of Truth)
+pipeline/models.py · v3.5.2 · 單一真理源 (Single Source of Truth)
 
 集中定義所有 Scanner 策略 flag 與個股頁 s03 燈號的判定邏輯。
 被 transform.py 與 build_scanner_row() 共用調用,確保前後端 100% 語意閉環。
+
+╔═════════════════════════════════════════════════════════════════════╗
+║ 【架構級財務不變式 · Financial Invariants · 全檔案適用】             ║
+╠═════════════════════════════════════════════════════════════════════╣
+║                                                                     ║
+║ FI-1 · 「營運槓桿釋放」的絕對前提:cur_op > 0                        ║
+║        本業必須實質獲利。任何虧損公司(即使虧損收斂使 op_yoy 為正)  ║
+║        都不得判為「營運槓桿釋放」· 這是財務語意的根本。              ║
+║        v3.5.2 引入,治 v3.5.1 修好 _y() 公式後的次生 bug。          ║
+║                                                                     ║
+║ FI-2 · 「s03 綠字」的絕對前提:opgm > 0                             ║
+║        毛利轉化率為負(本業虧損)· 費用效率無正向可言。             ║
+║        絕對禁止「倒賠還被稱讚費用控管優異」。                        ║
+║        v3.5.2 引入,治 v3.5.1 s03 對負 opgm 給綠字的 bug。          ║
+║                                                                     ║
+║ FI-3 · 「§1 標準公式」YoY 統一用 (cur - ly) / abs(ly) * 100        ║
+║        分母永遠取絕對值。基期為負時公式不反號。                      ║
+║        |ly| < 0.01 時回傳 None(交給 lowBase 標籤處理)。            ║
+║                                                                     ║
+║ FI-4 · 「§1 邊界規範」cur < 0 且 ly < 0 = 「虧損收斂」              ║
+║        絕對禁止判為「營運好轉」。這是 §1 明文規定。                  ║
+║        由 FI-1 具體落實(擋在型態 1/2/3 入口)。                     ║
+║                                                                     ║
+╠═════════════════════════════════════════════════════════════════════╣
+║ 【邊界矩陣驗收標準 · Boundary Matrix】                              ║
+║                                                                     ║
+║ 每次修 pipeline 邏輯前,必須驗證以下所有邊界(禁忌情境):            ║
+║                                                                     ║
+║   邊界 A:虧損收斂 (cur<0 且 ly<0 · op_yoy 為正) → opLev 必 False   ║
+║   邊界 B:由虧轉盈 (cur>0 且 ly<0 · turnedPositive=True)            ║
+║   邊界 C:基期為 0 (ly=0 · lowBase=True · opYoY=None 或標籤化)      ║
+║   邊界 D:QoQ 墜崖 (op_qoq<-15 且 om_qoq<-2) → opLev 必 False       ║
+║   邊界 E:毛利為負 (gp<0 · 極端燒錢公司)                            ║
+║   邊界 F:業外主導 (|noiRatio|>70 · 業外扭曲底線)                   ║
+║                                                                     ║
+║ 每次修 pipeline 後,必須抽驗:                                       ║
+║   分層抽樣 15 檔 (型態 1/2/3 各 3 檔 + 虧損邊界 3 檔 + 對照組 3 檔) ║
+║                                                                     ║
+║ 全庫飄移警報(修完 rebuild 後):                                    ║
+║   任一 flag 命中數變化 > 10% · 觸發人工檢查                         ║
+║                                                                     ║
+╚═════════════════════════════════════════════════════════════════════╝
 
 【設計原則】
 1. 純函式風格 · 只讀資料 · 不做 IO
@@ -15,7 +57,7 @@ pipeline/models.py · v3.5 · 單一真理源 (Single Source of Truth)
     傳入完整 quarterly 陣列 + hasCL + gc,回傳所有策略 flag + s03Signal
 - compute_op_lev_release(...)  -> (bool, str|None)
 - compute_core_stable(...)     -> bool
-- compute_s03_signal(...)      -> "red"|"green"|"yellow"|"yellow"(<4 季 fallback)
+- compute_s03_signal(...)      -> "red"|"green"|"yellow"
 - compute_order_pile_up(...)   -> bool
 - compute_three_up(...)        -> bool
 - compute_momentum_turn(...)   -> bool
@@ -86,11 +128,37 @@ def _mean_opgm(quarterly_slice: List[dict]) -> Optional[float]:
 # 【核心】營運槓桿釋放 · 3 型態 OR 聯集 + QoQ 墜崖防呆
 # ============================================================
 
-def _match_type1_volume_expansion(rev_yoy, gp_yoy, gm_delta, op_yoy) -> bool:
+def _match_type1_volume_expansion(rev_yoy, gp_yoy, gm_delta, op_yoy, cur_op) -> bool:
     """型態 1 · 以量補價 (EMS/封測/車零/大宗原料的主流劇本)
     revYoY 大幅衝高 · gmYoY 微負但非崩跌 · gpYoY 實質成長 · opYoY 遠超 revYoY
+    
+    ═══════ 財務不變式 (Financial Invariants · 禁止違反) ═══════
+    INV-1: cur_op > 0
+           本業必須實質獲利。虧損公司若因「虧損收斂」使 op_yoy 為正,
+           不得判為「營運槓桿釋放」(這是虧損改善,不是槓桿釋放)。
+           違反此不變式的示例:遠雄來 op=-9 但被誤判 (v3.5.1 bug 案例)
+    INV-2: rev_yoy > 10.0
+           營收要真的衝高,以量補價的核心是「量能翻倍」
+    INV-3: -3.0 <= gm_delta <= 0.5
+           毛利率可微跌 (讓利換量) 但不可崩跌 (成本失控)
+    INV-4: op_yoy > rev_yoy + 5.0 且 op_yoy > 15.0
+           營益增速跑贏營收 · 且絕對強度足夠
+    ═══════════════════════════════════════════════════════════
+    
+    ═══════ 邊界矩陣 (Boundary Matrix · 修 code 前必跑) ═══════
+    cur_op   ly_op   rev_yoy  op_yoy  gm_delta  預期判定  違反哪條
+    ─────────────────────────────────────────────────────────
+      100     50      +15      +30     -1.0     ✅ True   (正常命中)
+     -10      -30     +15      +66     -1.0     ❌ False  INV-1
+      100     50      +5       +30     -1.0     ❌ False  INV-2
+      100     50      +15      +30     -5.0     ❌ False  INV-3
+      100     50      +15      +18     -1.0     ❌ False  INV-4
+    ═══════════════════════════════════════════════════════════
     """
-    if not _all_not_none(rev_yoy, gp_yoy, gm_delta, op_yoy):
+    if not _all_not_none(rev_yoy, gp_yoy, gm_delta, op_yoy, cur_op):
+        return False
+    # v3.5.2: INV-1 · 本業必須實質獲利(禁止「虧損收斂」通過)
+    if cur_op <= 0:
         return False
     return (rev_yoy > 10.0
             and gp_yoy > 0
@@ -99,11 +167,38 @@ def _match_type1_volume_expansion(rev_yoy, gp_yoy, gm_delta, op_yoy) -> bool:
             and op_yoy > 15.0)
 
 
-def _match_type2_pure_expansion(rev_yoy, gm_delta, op_yoy) -> bool:
+def _match_type2_pure_expansion(rev_yoy, gm_delta, op_yoy, cur_op) -> bool:
     """型態 2 · 高純度擴張 (IC 設計/SaaS/高階利基硬體的黃金狀態)
     revYoY 成長 · gmYoY 持平或走揚 · opYoY 遠超 revYoY
+    
+    ═══════ 財務不變式 (Financial Invariants · 禁止違反) ═══════
+    INV-1: cur_op > 0
+           本業必須實質獲利。這是本次 v3.5.1 bug 的教訓:
+           4174 浩鼎 op=-211 但 opYoY=+69% 被誤判為 pure。
+           絕對禁止「本業還在虧損」的公司走「高純度擴張」語意。
+    INV-2: rev_yoy > 0
+           營收要成長 (排除衰退期)
+    INV-3: gm_delta >= 0
+           毛利率不惡化 (排除削價競爭假象)
+    INV-4: op_yoy > rev_yoy + 5.0 且 op_yoy > 10.0
+           營益增速跑贏營收 · 且絕對強度足夠
+    ═══════════════════════════════════════════════════════════
+    
+    ═══════ 邊界矩陣 (Boundary Matrix · 修 code 前必跑) ═══════
+    cur_op   ly_op   rev_yoy  op_yoy  gm_delta  預期判定  違反哪條
+    ─────────────────────────────────────────────────────────
+      100     50      +8      +30      +1.0     ✅ True   (正常命中)
+     -9      -14      +8      +33.7    +1.0     ❌ False  INV-1 (遠雄來)
+     -211    -125     +19.8   +69      +2.0     ❌ False  INV-1 (浩鼎)
+      100     50      -1      +30      +1.0     ❌ False  INV-2
+      100     50      +8      +30      -1.0     ❌ False  INV-3
+      100     50      +8      +8       +1.0     ❌ False  INV-4
+    ═══════════════════════════════════════════════════════════
     """
-    if not _all_not_none(rev_yoy, gm_delta, op_yoy):
+    if not _all_not_none(rev_yoy, gm_delta, op_yoy, cur_op):
+        return False
+    # v3.5.2: INV-1 · 本業必須實質獲利(禁止「虧損收斂」通過)
+    if cur_op <= 0:
         return False
     return (rev_yoy > 0
             and gm_delta >= 0
@@ -199,9 +294,10 @@ def compute_op_lev_release(cur_q: dict, prev_q: Optional[dict],
     cur_rev = now_d.get('rev')
     if _match_type3_turnaround(rev_yoy, op_yoy, cur_op, cur_rev, ly_op, opgm, opgm_prev4q_mean):
         return (True, "turnaround")
-    if _match_type1_volume_expansion(rev_yoy, gp_yoy, gm_delta, op_yoy):
+    # v3.5.2: 型態 1/2 加傳 cur_op(INV-1 · 禁止虧損公司通過)
+    if _match_type1_volume_expansion(rev_yoy, gp_yoy, gm_delta, op_yoy, cur_op):
         return (True, "volume")
-    if _match_type2_pure_expansion(rev_yoy, gm_delta, op_yoy):
+    if _match_type2_pure_expansion(rev_yoy, gm_delta, op_yoy, cur_op):
         return (True, "pure")
     
     return (False, None)
@@ -257,7 +353,33 @@ def compute_s03_signal(cur_q: dict, prev_q: Optional[dict],
     """
     s03 燈號判定 · 廢除跨產業硬閾值,改用個股自身歷史 8 季 OPGM 中位數
     
-    燈號優先權:🔴 紅 > 🟢 綠 > 🟡 黃 (投資人風控保護:警訊優先)
+    ═══════ 財務不變式 (Financial Invariants · 禁止違反) ═══════
+    INV-1: op > 0 才可判綠字
+           本業必須實質獲利。「費用轉化效率優異」的財務語意 = 本業獲利。
+           
+           ⚠️ 為什麼檢查 op 而非 opgm?
+              opgm = op / gp 有數學陷阱:
+              當 op<0 且 gp<0 時(如 4174 浩鼎 op=-211, gp=-14)· 
+              opgm = (-211)/(-14) = +15% 看似正 · 但財務語意是「燒錢燒到毛利負」。
+              只檢查 opgm > 0 會漏掉這種極端案例 · 必須直接檢查 op > 0。
+           
+           絕對禁止「倒賠還被稱讚費用控管優異」。
+           違反案例(v3.5.1 bug):2712 遠雄來 op=-9 判綠字 / 4174 浩鼎 op=-211 判綠字
+    INV-2: 資料不足(<4 季)一律走黃字
+           分母極端 · 沒有夠強的統計基礎判紅綠
+    INV-3: 燈號優先權 紅 > 綠 > 黃(投資人風控保護)
+    ═══════════════════════════════════════════════════════════
+    
+    ═══════ 邊界矩陣 (Boundary Matrix) ═══════
+    op       gp       opgm  median   op_qoq  om_qoq  預期判定  違反哪條
+    ─────────────────────────────────────────────────────────────
+      100    200     50    40       任意    任意    green    (絕對值優)
+      -9     26     -34.6  -20      任意    任意    yellow   (v3.5.2 修好 · 原 bug: green)
+      -211  -14    +15.07  +12      任意    任意    yellow   (4174 兩負相除陷阱 · v3.5.2 修好)
+      -8     20    -40      -30    -30     -3      red      (虧損擴大)
+      40     100    40      60     -30     -3      red      (顯著低於歷史+QoQ 墜崖)
+      100    200    50      60      任意    任意    yellow   (未達 median*1.2)
+    ═══════════════════════════════════════════════════════════
     
     Args:
         cur_q: 當季 quarterly row
@@ -270,7 +392,7 @@ def compute_s03_signal(cur_q: dict, prev_q: Optional[dict],
     """
     if not cur_q:
         return "yellow"
-    # 資料不足 fallback:< 4 季一律黃字,不判紅綠 (資料太少不做警告)
+    # INV-2: 資料不足 fallback:< 4 季一律黃字,不判紅綠 (資料太少不做警告)
     if history_quarter_count < 4 or opgm_self_median is None:
         return "yellow"
     
@@ -289,14 +411,24 @@ def compute_s03_signal(cur_q: dict, prev_q: Optional[dict],
         return "yellow"
     
     # 🔴 紅字:當季 OPGM 顯著低於歷史 (< median * 0.75) 且 QoQ 仍在向下跳水
+    # v3.5.2 加碼:opgm 為負且比較嚴重時也紅字(避免「深度虧損公司走綠字」bug)
     red_condition_1 = opgm < opgm_self_median * 0.75
     red_condition_2 = ((op_qoq is not None and op_qoq < -15.0)
                        or (om_qoq_delta is not None and om_qoq_delta < -2.0))
     if red_condition_1 and red_condition_2:
         return "red"
     
+    # v3.5.2 修法 B (升級 · 邊界矩陣 E): INV-1 · 本業必須實質獲利才能綠字
+    # ⚠️ 兩負相除得正的數學陷阱:4174 浩鼎 op=-211 且 gp=-14
+    #     → opgm = (-211)/(-14) = +15% (看似正)但財務語意是「燒錢燒到毛利都負」
+    # 只檢查 opgm > 0 不夠 · 必須直接檢查 op > 0(本業實質獲利)
+    op_val = now_d.get('op')
+    if op_val is None or op_val <= 0:
+        return "yellow"
+    
     # 🟢 綠字:當季 OPGM 顯著高於歷史 (>= median * 1.2) 
     #        或 絕對值優秀 (>= 50%) 且本業成長
+    #        (op > 0 已由上方 INV-1 gate 保證 · 綠字語意成立)
     green_condition_1 = opgm >= opgm_self_median * 1.2
     green_condition_2 = (opgm >= 50.0 and op_yoy is not None and op_yoy > 0)
     if green_condition_1 or green_condition_2:
