@@ -747,8 +747,12 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
         noi_val = _n(row["noi"], 1)
         cl_val = _n(row["cl"]) or 0
         # v3.4: 普通股股本(百萬)+ 合約負債佔股本比 (%)
-        cs_val = _n(row.get("capitalStock")) or 0
-        cl_ratio = round(cl_val / cs_val * 100, 1) if (cs_val > 0 and cl_val > 0) else None
+        # v3.5.4 決策 #3 + 規格 E:cs<=0 一律正規化為 None(避免 0 假值污染下游);
+        #                         clRatio 判斷同步加 None 保護(避免 None > 0 TypeError)。
+        # r2:_compute_cl_ratio 抽為 module-level 函式,便於 pytest 直接呼叫實作驗證。
+        cs_raw = _n(row.get("capitalStock"))
+        cs_val = cs_raw if (cs_raw is not None and cs_raw > 0) else None
+        cl_ratio = _compute_cl_ratio(cl_val, cs_val)
         full_quarterly.append({
             "q":   _q_label(str(row["date"])[:10]),
             "cl":  cl_val,
@@ -853,6 +857,22 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
 # ============================================================
 # Scanner row builder
 # ============================================================
+def _compute_cl_ratio(cl_val, cs_val) -> Optional[float]:
+    """
+    v3.5.4-r2 · 規格 E · 對應 test_clratio_helper_handles_none_cs。
+    抽為 module-level 函式,便於 pytest 直接呼叫實作(而非在測試內複製公式)。
+
+    cl_val / cs_val * 100(佔股本比,%)
+      · cs_val is None 或 <= 0 → None(避免 None > 0 TypeError)
+      · cl_val <= 0 或 None → None
+    """
+    if cs_val is None or cs_val <= 0:
+        return None
+    if cl_val is None or cl_val <= 0:
+        return None
+    return round(cl_val / cs_val * 100, 1)
+
+
 def _pct_change(current: float, base: float) -> Optional[float]:
     if base is None or base == 0:
         return None
@@ -940,6 +960,13 @@ def build_scanner_row(detail: dict) -> Optional[dict]:
     #       Scanner 前端徹底降級為 View · 不再寫任何業務判定邏輯
     flags = models.compute_all_flags(q, detail.get("hasCL", False), gc)
 
+    # v3.5.4: 本業股本獲利率(唯一真理源 · 對應 FI-6 / FI-8 / FI-9 · 邊界 G-R)
+    #   決策 #7:金融業明確排除 · 不依賴 op is None 自然過濾
+    #   規格 A/B/四.1:capitalChangedTTM 用相鄰季度變化,資料不足=None
+    #   兩個 percentile + opCapitalDataStale 此處先設 None/False,
+    #   由 build.py 二輪 compute_op_capital_percentiles 依 reference_quarter 覆寫。
+    op_cap = models.compute_op_to_capital(q, detail.get("industry"))
+
     return {
         "id":       detail["id"],
         "name":     detail["name"],
@@ -974,4 +1001,15 @@ def build_scanner_row(detail: dict) -> Optional[dict]:
         # v3.5.1: UI 標籤旗標(消除視覺矛盾 · 遵循「財務指標判讀規範 §1 邊界定義」)
         "turnedPositive": flags["turnedPositive"],
         "lowBase":        flags["lowBase"],
+        # v3.5.4: 本業股本獲利率 · 資料新鮮度契約(FI-6/FI-8/FI-9 · 邊界 G-R)
+        "latestQuarter":                op_cap["latestQuarter"],
+        "capitalStock":                 op_cap["capitalStock"],
+        "opToCapitalQuarter":           op_cap["opToCapitalQuarter"],
+        "opToCapitalTTM":               op_cap["opToCapitalTTM"],
+        "capitalChangedTTM":            op_cap["capitalChangedTTM"],
+        "opCapitalIneligible":          op_cap["opCapitalIneligible"],
+        # 二輪 percentile + stale 由 build.py 依 reference_quarter 覆寫
+        "opToCapitalQuarterPercentile": None,
+        "opToCapitalTTMPercentile":     None,
+        "opCapitalDataStale":           False,
     }

@@ -33,13 +33,21 @@ def write_stock_detail(detail: dict) -> Path:
     return path
 
 
-def write_scanner_index(rows: list[dict], current_quarter: str) -> Path:
+def write_scanner_index(rows: list[dict], current_quarter: str,
+                         extra_meta: dict | None = None) -> Path:
+    """
+    v3.5.4-r2:新增 extra_meta 參數以支援 op_capital_percentile_quarter 等 lifecycle 欄位。
+    向下相容:未傳 extra_meta 時行為不變。
+    """
+    meta: dict = {
+        "last_updated": datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M %z"),
+        "universe_size": len(rows),
+        "current_quarter": current_quarter,
+    }
+    if extra_meta:
+        meta.update(extra_meta)
     payload = {
-        "meta": {
-            "last_updated": datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M %z"),
-            "universe_size": len(rows),
-            "current_quarter": current_quarter,
-        },
+        "meta": meta,
         "stocks": rows,
     }
     _write_json(config.SCANNER_INDEX_PATH, payload)

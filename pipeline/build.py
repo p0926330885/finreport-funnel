@@ -25,7 +25,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import config, ingest, output, transform, universe
+from . import config, ingest, models, output, transform, universe
 from .finmind_client import load_client
 
 logging.basicConfig(
@@ -36,17 +36,28 @@ logging.basicConfig(
 log = logging.getLogger("build")
 
 
-def _current_quarter_label(scanner_rows: list[dict]) -> str:
-    """Take the current quarter from the first stock's latest quarter label."""
-    if not scanner_rows:
-        return "—"
-    first_id = scanner_rows[0]["id"]
-    detail_path = config.STOCKS_OUT_DIR / f"{first_id}.json"
-    if not detail_path.exists():
-        return "—"
-    detail = json.loads(detail_path.read_text(encoding="utf-8"))
-    q = detail.get("quarterly", [])
-    return q[-1]["q"] if q else "—"
+def _read_existing_opcap_reference_quarter() -> str | None:
+    """
+    v3.5.4-r2 · FI-9(b):讀既有 scanner_index.json 的 op_capital_percentile_quarter,
+    partial build 沿用不切季;r3 · full build 也讀(供無達標 coverage 時保留既有)。
+      · 檔案不存在 → None(首次 build)
+      · 無 op_capital_percentile_quarter · fallback 讀 current_quarter(migration path)
+      · 讀失敗 → None + log warning
+    """
+    scanner_path = config.SCANNER_INDEX_PATH
+    if not scanner_path.exists():
+        return None
+    try:
+        data = json.loads(scanner_path.read_text(encoding="utf-8"))
+        meta = data.get("meta", {}) or {}
+        rq = meta.get("op_capital_percentile_quarter")
+        if rq:
+            return rq
+        # migration fallback:讀舊 current_quarter
+        return meta.get("current_quarter") or None
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Failed to read existing meta.op_capital_percentile_quarter: %s", exc)
+        return None
 
 
 def _resolve_targets(mode: str, universe_df, stock_ids: list[str] | None, batch: int | None) -> tuple[list[str], str]:
@@ -159,8 +170,61 @@ def run(mode: str, stock_ids: list[str] | None = None, force: bool = False, batc
     else:
         merged_rows = scanner_rows
 
-    current_q = _current_quarter_label(merged_rows)
-    scanner_path = output.write_scanner_index(merged_rows, current_q)
+    # ============================================================
+    # v3.5.4-r3:本業股本獲利率 · lifecycle-safe 二輪處理
+    #   Blocker 1 修正:partial mode 不清空全市場既有 percentile
+    #   Blocker 2 修正:reference_quarter 與 row order 無關
+    #   r3 修正:full build 也讀 existing_ref_q(未達 80% coverage 保留既有)
+    # 對應 pipeline/models.py 檔頭 FI-9 · 邊界 O + P + Q + R
+    # ============================================================
+    is_partial_mode = (batch is not None or bool(stock_ids))
+
+    # r3 修正:full build 也必須讀 existing_reference_quarter
+    #         (供 determine_reference_quarter 判定「無達標時保留既有」邏輯)
+    existing_ref_q = _read_existing_opcap_reference_quarter()
+
+    # FI-9(c) · 邊界 P + Q:full build 依 coverage>=80% 切季,
+    #         未達標且 existing 仍存在 → 保留 existing + warning
+    #         modal fallback 使用 deterministic tie-break
+    reference_quarter, rq_warning = models.determine_reference_quarter(
+        merged_rows,
+        existing_reference_quarter=existing_ref_q,
+        is_full_build=(not is_partial_mode),
+    )
+    if rq_warning:
+        log.warning("op-to-capital reference quarter: %s", rq_warning)
+
+    # 二輪 percentile 計算(FI-9 · 邊界 O + R)
+    #   full build → full_recompute
+    #   partial + all_migrated → partial_recompute(用 frozen ref_q · 不切季)
+    #   partial + mixed/none  → partial_preserve_existing(不動任何既有 pct + warning)
+    #   reference_quarter=None → no_reference_quarter(清空 universe + warning)
+    pct_stats = models.compute_op_capital_percentiles(
+        merged_rows,
+        reference_quarter=reference_quarter,
+        is_full_build=(not is_partial_mode),
+    )
+    for w in pct_stats.get("warnings", []):
+        log.warning("op-to-capital percentiles: %s", w)
+    log.info(
+        "op-to-capital percentiles: action=%s schema=%s ref_q=%s q_universe=%d ttm_universe=%d",
+        pct_stats["action"], pct_stats["schema_status"],
+        pct_stats["reference_quarter"],
+        pct_stats["q_universe_size"], pct_stats["ttm_universe_size"],
+    )
+
+    # current_quarter 供舊 UI 顯示;r2 · 語意等同 reference_quarter(order-independent)
+    current_q = reference_quarter or "—"
+
+    # r2 新增 meta 欄位供稽核(對應 FI-9 · Blocker 2 修正 5)
+    extra_meta = {
+        "op_capital_percentile_quarter": pct_stats["reference_quarter"],
+        "op_capital_q_universe_size":    pct_stats["q_universe_size"],
+        "op_capital_ttm_universe_size":  pct_stats["ttm_universe_size"],
+        "op_capital_action":             pct_stats["action"],
+        "op_capital_schema_status":      pct_stats["schema_status"],
+    }
+    scanner_path = output.write_scanner_index(merged_rows, current_q, extra_meta=extra_meta)
     log.info("Wrote scanner index: %s (%d stocks)", scanner_path.name, len(merged_rows))
 
     # 6. Health distribution log (Phase 2 feature)

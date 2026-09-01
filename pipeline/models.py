@@ -26,6 +26,47 @@ pipeline/models.py · v3.5.2 · 單一真理源 (Single Source of Truth)
 ║        絕對禁止判為「營運好轉」。這是 §1 明文規定。                  ║
 ║        由 FI-1 具體落實(擋在型態 1/2/3 入口)。                     ║
 ║                                                                     ║
+║ FI-6 · 「本業股本獲利率」金融業必為 null                             ║
+║        industry == 'finance' → opToCapital* 全數 null                ║
+║        不依賴 op is None 自然排除。金融業的營業利益/股本財務語意     ║
+║        與一般產業不可比(收入為利差/手續費,非毛利模式)。            ║
+║        v3.5.4 引入 · 對應「本業股本獲利率規格」使用者決策 #7。       ║
+║                                                                     ║
+║ FI-7 · [A2 獨立 Patch · 尚未落實 · 規劃於 v3.5.5]                   ║
+║        opgm 分母必須 > 0(修「兩負相除污染 median」bug)              ║
+║        待補規格:                                                    ║
+║          (a) 只有 opgm_self_median > 0 才可用歷史中位數×1.2 判綠    ║
+║          (b) 當季 gp<=0 需另定 red / not_applicable,非直接 yellow  ║
+║        對應 backlog/v3.5.5_s03_median_fix.md                        ║
+║                                                                     ║
+║ FI-8 · 「資料新鮮度」stale 檔不進百分位 universe                     ║
+║        latestQuarter != reference_quarter 的公司(含 latestQuarter    ║
+║        為 None 或格式無效者),opCapitalDataStale=true,兩個          ║
+║        percentile 必為 null。單季/TTM 值仍照留供 UI 顯示。          ║
+║        v3.5.4 引入 · r3 明確含 None/invalid quarter 情境。          ║
+║                                                                     ║
+║ FI-9 · 「build lifecycle 契約」r2 引入 · r3 修正 4 條漏洞            ║
+║  (a) partial build 不得清空全市場既有 percentile。r3:含既有 pct     ║
+║      的 migrated row 也不動,只重算 stale flag。                    ║
+║  (b) partial build 沿用 meta.op_capital_percentile_quarter,        ║
+║      不因單一批次提早切季。                                          ║
+║  (c) full build 才可切換 reference_quarter;r3 修正切季 gate:       ║
+║      · 從最新季倒序找 eligible coverage >= 80% 者                   ║
+║      · 有達標 → 允許切換(即使 existing 不同)                       ║
+║      · 沒達標 + existing 仍存在 eligible rows → 維持 existing +     ║
+║        warning(不因訊號不足就 drift)                              ║
+║      · 只有 existing 不存在 or 首次建置 → fallback modal            ║
+║      · full build 也必須讀 existing_reference_quarter,不固定 None   ║
+║  (d) partial + mixed schema:完全不動任何既有 pct(既有 migrated     ║
+║      pct 保留 · 新 build row 因 transform 產出時就是 None · 無需     ║
+║      清空),只重算 stale flag,並發 warning。                      ║
+║  (e) modal fallback 必須 deterministic:                            ║
+║      · 不用 Counter.most_common(1)(encounter-order tie)            ║
+║      · 同票時明文選最新季度(_quarter_sort_key 最大者)              ║
+║      · 結果必須與 rows 排序完全無關                                 ║
+║  (f) reference_quarter=None 時不得跨季計算 percentile,回傳空       ║
+║      universe + warning。                                          ║
+║                                                                     ║
 ╠═════════════════════════════════════════════════════════════════════╣
 ║ 【邊界矩陣驗收標準 · Boundary Matrix】                              ║
 ║                                                                     ║
@@ -38,8 +79,36 @@ pipeline/models.py · v3.5.2 · 單一真理源 (Single Source of Truth)
 ║   邊界 E:毛利為負 (gp<0 · 極端燒錢公司)                            ║
 ║   邊界 F:業外主導 (|noiRatio|>70 · 業外扭曲底線)                   ║
 ║                                                                     ║
-║ 每次修 pipeline 後,必須抽驗:                                       ║
-║   分層抽樣 15 檔 (型態 1/2/3 各 3 檔 + 虧損邊界 3 檔 + 對照組 3 檔) ║
+║   邊界 G:金融業 → opToCapital* = null, ineligible='finance'         ║
+║   邊界 H:cs 缺值 (None/0/負) → 全 null, ineligible='cs_invalid'     ║
+║   邊界 I:近 4 季 op 不齊 → opToCapitalTTM = null                    ║
+║   邊界 J:相鄰季 CS 變化 max(|cs[i]/cs[i-1]-1|) >= 20%              ║
+║          → capitalChangedTTM=true;若不足 5 季或 CS<=0 存在則 null   ║
+║          TTM 仍照算(警示不擋計算 · 對應決策 #2)                    ║
+║   邊界 K:百分位同值 → count(v <= current) / N * 100(CDF · 決策 D)  ║
+║   邊界 L:latestQuarter != reference_quarter → opCapitalDataStale     ║
+║          =true;兩個 percentile 為 null(FI-8);含 latestQuarter=    ║
+║          None 或格式無效者(r3)                                     ║
+║                                                                     ║
+║   [r2 lifecycle 邊界 · FI-9]                                        ║
+║   邊界 O:partial build + 混合/none migrated schema                 ║
+║          → 完全不動既有 pct(含 migrated row 的 pct),              ║
+║             只重算 stale flag,發 warning(r3 修正)                 ║
+║   邊界 P:full build 選 reference_quarter                            ║
+║          · 從最新季倒序找 eligible coverage >= 80%(切季 gate)      ║
+║          · 未達標 + existing 仍存在 → 維持 existing + warning       ║
+║          · 未達標 + existing 不存在/首次 → deterministic modal       ║
+║                                                                     ║
+║   [r3 新增邊界]                                                     ║
+║   邊界 Q:modal fallback deterministic(非 Counter encounter order)  ║
+║          · 同票時 tie-break: _quarter_sort_key 最大者(最新季度)    ║
+║          · 結果與 rows 排序無關                                     ║
+║   邊界 R:reference_quarter=None → 不得跨季計算 percentile,           ║
+║          清空 universe,不發布 pct,warning                          ║
+║                                                                     ║
+║ 每次修 pipeline 後,必須執行:                                       ║
+║   1) pytest pipeline/tests/test_op_to_capital.py -v                 ║
+║   2) 分層抽樣 15 檔 (型態 1/2/3 各 3 檔 + 虧損邊界 3 檔 + 對照組 3 檔)║
 ║                                                                     ║
 ║ 全庫飄移警報(修完 rebuild 後):                                    ║
 ║   任一 flag 命中數變化 > 10% · 觸發人工檢查                         ║
@@ -589,3 +658,427 @@ def _delta_pp(now_v, prev_v):
     if now_v is None or prev_v is None:
         return None
     return now_v - prev_v
+
+
+# ============================================================
+# 【v3.5.4】本業股本獲利率 · Operating Profit to Capital Stock
+#
+# 依據:2026-09-01「本業股本獲利率雙軸設計」使用者 9 條決策 + 6 項規格修正
+#      2026-09-01 r2 修正:blocker 1(partial 清空)+ blocker 2(順序決定季度)
+#      2026-09-01 r3 修正:adversarial tests 揭露 4 個新漏洞
+#         · reference_quarter lifecycle:full build 也讀 existing;
+#           coverage<80% + existing 存在 → 維持 existing 不 drift
+#         · modal fallback deterministic:同票選最新季度,非 Counter encounter
+#         · partial mixed schema preserve:含 migrated row 的既有 pct 也不動
+#         · reference_quarter=None 不得跨季計算
+#
+# 對應規格:pipeline/models.py 檔頭 FI-6 / FI-8 / FI-9(r3 六條) + 邊界 G-R
+#
+# 決策對照(續):
+#   #1  TTM 用 D 法        · sum(近4Q op) / capitalStock(最新季) * 100
+#   #2  警示不擋計算      · capitalChangedTTM=true 時 TTM 仍照算
+#   #3  完整 eligible universe · 只含 non-finance + cs>0 + op非null + non-stale
+#   #4  不做分類          · 無 profitabilityType 欄位
+#   #7  金融明確排除      · industry='finance' → ineligible='finance'
+#   規格 A  q[-5:] 5 端點  · 但改用相鄰季度變化(規格 四.1)
+#   規格 B  資料不足=null  · 不回傳 false
+#   規格 C  百分位拆兩欄  · opToCapitalQuarterPercentile / TTMPercentile
+#   規格 D  CDF 算法       · count(v <= current) / N * 100
+#   規格 四.1 相鄰季度變化 · max(abs(cs[i]/cs[i-1] - 1)) >= 0.20
+# ============================================================
+
+
+def is_opcap_eligible(industry: Optional[str],
+                       quarterly: List[dict]) -> Tuple[bool, Optional[str]]:
+    """
+    判定該檔是否具備「計算本業股本獲利率單季/TTM 值」的最低條件。
+
+    Returns:
+        (is_eligible, ineligible_reason)
+        ineligible_reason ∈ {'finance', 'no_quarterly', 'cs_invalid', 'op_null', None}
+    """
+    if industry == 'finance':
+        return (False, 'finance')
+    if not quarterly:
+        return (False, 'no_quarterly')
+    cur = quarterly[-1]
+    cs = cur.get('capitalStock')
+    if cs is None or cs <= 0:
+        return (False, 'cs_invalid')
+    if cur.get('op') is None:
+        return (False, 'op_null')
+    return (True, None)
+
+
+def compute_op_to_capital(quarterly: List[dict],
+                           industry: Optional[str]) -> Dict[str, Any]:
+    """
+    本業股本獲利率主 API · v3.5.4 資料層唯一真理源。
+
+    Returns dict with 9 keys:
+        opToCapitalQuarter / opToCapitalTTM / capitalChangedTTM /
+        opCapitalIneligible / latestQuarter / capitalStock /
+        opToCapitalQuarterPercentile / opToCapitalTTMPercentile /
+        opCapitalDataStale
+
+    公式:
+        opToCapitalQuarter = op / capitalStock * 100
+        opToCapitalTTM     = sum(近4季 op) / capitalStock(最新季) * 100    ← D 法
+        capitalChangedTTM  = max(abs(css[i]/css[i-1] - 1) for i in 1..4) >= 0.20
+    """
+    result = {
+        'opToCapitalQuarter':           None,
+        'opToCapitalTTM':               None,
+        'capitalChangedTTM':            None,
+        'opCapitalIneligible':          None,
+        'latestQuarter':                None,
+        'capitalStock':                 None,
+        'opToCapitalQuarterPercentile': None,
+        'opToCapitalTTMPercentile':     None,
+        'opCapitalDataStale':           False,
+    }
+
+    if quarterly:
+        result['latestQuarter'] = quarterly[-1].get('q')
+
+    eligible, reason = is_opcap_eligible(industry, quarterly)
+    if not eligible:
+        result['opCapitalIneligible'] = reason
+        if quarterly and quarterly[-1].get('capitalStock') is not None:
+            cs_raw = quarterly[-1].get('capitalStock')
+            if isinstance(cs_raw, (int, float)) and cs_raw > 0:
+                result['capitalStock'] = cs_raw
+        return result
+
+    cur = quarterly[-1]
+    cs = cur.get('capitalStock')
+    op = cur.get('op')
+    result['capitalStock'] = cs
+    result['opToCapitalQuarter'] = round(op / cs * 100, 1)
+
+    if len(quarterly) >= 4:
+        last4_ops = [r.get('op') for r in quarterly[-4:]]
+        if all(x is not None for x in last4_ops):
+            result['opToCapitalTTM'] = round(sum(last4_ops) / cs * 100, 1)
+
+    if len(quarterly) >= 5:
+        css5 = [r.get('capitalStock') for r in quarterly[-5:]]
+        if all(x is not None and x > 0 for x in css5):
+            max_adj_change = max(
+                abs(css5[i] / css5[i - 1] - 1) for i in range(1, 5)
+            )
+            # round 到 6 位避免浮點誤差(如 1200/1000-1 = 0.19999...)
+            result['capitalChangedTTM'] = (round(max_adj_change, 6) >= 0.20)
+
+    return result
+
+
+# ============================================================
+# 【v3.5.4-r3】build lifecycle helpers · FI-9
+# ============================================================
+
+_OPCAP_SCHEMA_KEY = 'opCapitalIneligible'
+
+
+def _row_has_opcap_schema(row: dict) -> bool:
+    """判定 row 是否為 v3.5.4 schema(有本業股本獲利率欄位群)。"""
+    return _OPCAP_SCHEMA_KEY in row
+
+
+def _quarter_sort_key(q_label: Optional[str]) -> Tuple[int, int]:
+    """
+    將 'YYYY/NQ' 轉為可排序的 tuple(供 tie-break 用)。
+    如 '2026/2Q' → (2026, 2);None 或格式錯誤 → (0, 0)。
+    """
+    if not q_label or '/' not in q_label:
+        return (0, 0)
+    try:
+        year_s, quarter_s = q_label.split('/', 1)
+        year = int(year_s)
+        quarter_num = int(''.join(c for c in quarter_s if c.isdigit()) or '0')
+        return (year, quarter_num)
+    except (ValueError, AttributeError):
+        return (0, 0)
+
+
+def _deterministic_modal_quarter(counts) -> Optional[str]:
+    """
+    FI-9(e) · 邊界 Q:deterministic modal quarter。
+
+    · 不使用 Counter.most_common(1) 的 encounter-order tie behavior
+    · 明文 tie-break:count 相同時,選 _quarter_sort_key 最大者(最新季度)
+    · 完全與 rows 排序無關(僅取決於 count 與 quarter 字面值)
+
+    Args:
+        counts: dict-like mapping quarter_label -> count(通常是 Counter)
+    """
+    if not counts:
+        return None
+    items = list(counts.items())
+    # 主鍵:count(大→前);同票 tie-break:_quarter_sort_key(新→前)
+    items.sort(key=lambda kv: (kv[1], _quarter_sort_key(kv[0])), reverse=True)
+    return items[0][0]
+
+
+def determine_reference_quarter(
+    rows: List[dict],
+    existing_reference_quarter: Optional[str],
+    is_full_build: bool,
+    coverage_threshold: float = 0.80,
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    FI-9(c) · 邊界 P:決定百分位計算所用的 reference_quarter。
+
+    r3 修正(相對 r2):
+      · full build 也讀 existing_reference_quarter(r2 固定傳 None)
+      · full build 未達 80% coverage + existing 仍存在 eligible rows
+        → 維持 existing + warning(不 drift 到弱訊號 modal)
+      · modal fallback 使用 deterministic tie-break(FI-9(e))
+
+    決策邏輯(依序):
+      · partial build(is_full_build=False):
+          · existing 有值 → 沿用,無 warning(FI-9(b))
+          · 無 existing(首次 partial · 極罕見)→ deterministic modal + warning
+
+      · full build(is_full_build=True):
+          1. 從最新季倒序找 eligible coverage >= threshold 的季度
+             · 有 → 允許切季(切季 gate · 即使 existing 不同)
+          2. 沒達標 + existing 仍存在於 eligible rows
+             · → 維持 existing + warning(FI-9(c))
+          3. 沒達標 + existing 不存在於 eligible rows(或 existing=None · 首次)
+             · → deterministic modal + warning
+
+    row order 無關性(FI-9(e) · 邊界 Q):
+      · 所有邏輯只用 Counter 與 _deterministic_modal_quarter
+      · 不使用 first()/Counter.most_common(1) 等 encounter-dependent API
+    """
+    from collections import Counter
+    eligible_qs = [
+        r.get('latestQuarter')
+        for r in rows
+        if _row_has_opcap_schema(r)
+           and r.get('opCapitalIneligible') is None
+           and r.get('latestQuarter')
+    ]
+
+    # 無 eligible row 極端情況
+    if not eligible_qs:
+        if existing_reference_quarter is not None:
+            return (existing_reference_quarter,
+                    f"no eligible rows to determine reference_quarter; "
+                    f"keeping existing {existing_reference_quarter}")
+        return (None,
+                "no eligible rows and no existing reference_quarter")
+
+    counter = Counter(eligible_qs)
+    total = len(eligible_qs)
+    eligible_qs_set = set(counter.keys())
+
+    # partial mode:沿用既有 · 不切季(FI-9(b))
+    if not is_full_build:
+        if existing_reference_quarter is not None:
+            return (existing_reference_quarter, None)
+        # 首次 partial(無既有 meta)· deterministic modal
+        modal_q = _deterministic_modal_quarter(counter)
+        return (modal_q,
+                f"partial build without existing reference_quarter; "
+                f"fallback to deterministic modal {modal_q}")
+
+    # full build 邏輯(r3 修正)· FI-9(c)
+    # 步驟 1:從最新季倒序找 coverage >= threshold 的季度 → 切季 gate
+    for q in sorted(counter.keys(), key=_quarter_sort_key, reverse=True):
+        if counter[q] / total >= coverage_threshold:
+            return (q, None)
+
+    # 步驟 2:未達標 + existing 仍存在於 eligible rows → 維持 existing + warning
+    if existing_reference_quarter is not None and existing_reference_quarter in eligible_qs_set:
+        return (existing_reference_quarter,
+                f"full build: no quarter reached {int(coverage_threshold*100)}% coverage; "
+                f"keeping existing {existing_reference_quarter} "
+                f"(present in {counter[existing_reference_quarter]}/{total} eligible rows)")
+
+    # 步驟 3:未達標 + existing 不在 eligible(或首次)→ deterministic modal + warning
+    modal_q = _deterministic_modal_quarter(counter)
+    if existing_reference_quarter is not None:
+        return (modal_q,
+                f"full build: no quarter reached {int(coverage_threshold*100)}% coverage, "
+                f"and existing {existing_reference_quarter} not in eligible rows; "
+                f"fallback to deterministic modal {modal_q}")
+    return (modal_q,
+            f"full build (first time): no quarter reached {int(coverage_threshold*100)}% coverage; "
+            f"fallback to deterministic modal {modal_q}")
+
+
+def _is_stale(row: dict, reference_quarter: Optional[str]) -> bool:
+    """
+    FI-8 · 邊界 L:row.latestQuarter != reference_quarter → stale。
+    r3:latestQuarter is None 或格式無效者,自然 != reference_quarter → stale。
+    reference_quarter=None 時不做 stale 判定(呼叫端已擋)。
+    """
+    if reference_quarter is None:
+        return False
+    return row.get('latestQuarter') != reference_quarter
+
+
+def compute_op_capital_percentiles(
+    rows: List[dict],
+    reference_quarter: Optional[str],
+    is_full_build: bool,
+) -> Dict[str, Any]:
+    """
+    百分位計算 + 資料新鮮度標記 · in-place 修改 rows。
+
+    r3 修正(相對 r2):
+      · partial_preserve_existing 分支:**完全不動任何既有 pct**
+        (含 migrated row 的既有 pct · r2 錯把 migrated pct 清成 None)
+        · 新 build 的 row 因 transform 產出時 pct 就是 None · 無需清空
+        · 只重算 migrated row 的 stale flag(語意上仍需正確)
+        · warning 文案改為誠實描述「保留一切 pct」不再有語意衝突
+      · 新增分支:reference_quarter=None → 空 universe + warning(FI-9(f) · 邊界 R)
+
+    Returns:
+        {
+            'reference_quarter':   str | None,
+            'q_universe_size':     int,
+            'ttm_universe_size':   int,
+            'schema_status':       'all_migrated' | 'mixed' | 'none_migrated',
+            'action':              'full_recompute' | 'partial_recompute' |
+                                   'partial_preserve_existing' | 'no_reference_quarter',
+            'warnings':            List[str],
+        }
+
+    row order 無關性:所有邏輯只用 row 屬性 filter/map,不依 rows list 順序。
+    reference_quarter 由呼叫端(build.py)透過 determine_reference_quarter 傳入,
+    本函式不決定 ref_q。
+    """
+    warnings: List[str] = []
+
+    migrated_rows = [r for r in rows if _row_has_opcap_schema(r)]
+    legacy_rows = [r for r in rows if not _row_has_opcap_schema(r)]
+
+    if not migrated_rows and not legacy_rows:
+        return {
+            'reference_quarter': reference_quarter,
+            'q_universe_size': 0,
+            'ttm_universe_size': 0,
+            'schema_status': 'none_migrated',
+            'action': 'partial_preserve_existing',
+            'warnings': ['no rows to process'],
+        }
+
+    if not legacy_rows:
+        schema_status = 'all_migrated'
+    elif not migrated_rows:
+        schema_status = 'none_migrated'
+    else:
+        schema_status = 'mixed'
+
+    # ------------------------------------------------------------
+    # 分支 1(r3):partial + (mixed / none_migrated)
+    # FI-9(a)+(d) · 邊界 O:完全不動任何既有 pct;只重算 stale flag
+    # ------------------------------------------------------------
+    if not is_full_build and schema_status != 'all_migrated':
+        # r3:不清任何 pct(migrated row 的既有 pct 保留 · legacy row 完全不動)
+        # 新 build 的 migrated row 因 transform 產出時 pct 就是 None,無需額外處理
+        # 只重算 migrated row 的 stale flag(語意仍需正確)
+        stale_updated = 0
+        for r in migrated_rows:
+            if r.get('opCapitalIneligible') is None:
+                new_stale = _is_stale(r, reference_quarter) if reference_quarter is not None else False
+                if r.get('opCapitalDataStale') != new_stale:
+                    stale_updated += 1
+                r['opCapitalDataStale'] = new_stale
+        warnings.append(
+            f"partial build with {schema_status} schema: preserved all existing percentiles "
+            f"({len(migrated_rows)} migrated + {len(legacy_rows)} legacy rows). "
+            f"Percentile values kept as-is (new build rows already have percentile=None from "
+            f"transform layer). Stale flag re-evaluated for {stale_updated} migrated rows. "
+            f"Run a full build to publish fresh percentiles for the entire universe."
+        )
+        return {
+            'reference_quarter': reference_quarter,
+            'q_universe_size': 0,
+            'ttm_universe_size': 0,
+            'schema_status': schema_status,
+            'action': 'partial_preserve_existing',
+            'warnings': warnings,
+        }
+
+    # ------------------------------------------------------------
+    # 分支 2(r3 新增):reference_quarter=None
+    # FI-9(f) · 邊界 R:不得跨季計算,清空 universe 不發布 pct
+    # ------------------------------------------------------------
+    if reference_quarter is None:
+        for r in migrated_rows:
+            r['opToCapitalQuarterPercentile'] = None
+            r['opToCapitalTTMPercentile'] = None
+            r['opCapitalDataStale'] = False
+        action = 'full_recompute' if is_full_build else 'partial_recompute'
+        warnings.append(
+            "reference_quarter is None: cannot compute percentiles without a reference "
+            "quarter (would risk mixing cohorts across quarters). Universe emptied to 0, "
+            "no percentiles published."
+        )
+        return {
+            'reference_quarter': None,
+            'q_universe_size': 0,
+            'ttm_universe_size': 0,
+            'schema_status': schema_status,
+            'action': 'no_reference_quarter',
+            'warnings': warnings,
+        }
+
+    # ------------------------------------------------------------
+    # 分支 3:full_recompute 或 partial_recompute(all_migrated)
+    # 兩者 pct 計算邏輯一致(差別在 reference_quarter 來源)
+    # ------------------------------------------------------------
+    action = 'full_recompute' if is_full_build else 'partial_recompute'
+
+    # 清空 migrated_rows 的 pct + stale flag(這些將被重新計算)
+    for r in migrated_rows:
+        r['opToCapitalQuarterPercentile'] = None
+        r['opToCapitalTTMPercentile'] = None
+        r['opCapitalDataStale'] = False
+
+    # 標 stale:latestQuarter != reference_quarter → stale(含 None / invalid)
+    for r in migrated_rows:
+        if r.get('opCapitalIneligible') is None:
+            r['opCapitalDataStale'] = _is_stale(r, reference_quarter)
+
+    # 建 universe:eligible + non-stale + 對應欄位有值
+    def _is_universe_member(r, field):
+        return (r.get('opCapitalIneligible') is None
+                and not r.get('opCapitalDataStale', False)
+                and r.get(field) is not None)
+
+    q_vals = [r['opToCapitalQuarter'] for r in migrated_rows
+              if _is_universe_member(r, 'opToCapitalQuarter')]
+    ttm_vals = [r['opToCapitalTTM'] for r in migrated_rows
+                if _is_universe_member(r, 'opToCapitalTTM')]
+
+    n_q = len(q_vals)
+    n_t = len(ttm_vals)
+
+    # CDF: count(v <= current) / N * 100(規格 D · 邊界 K)
+    if n_q > 0:
+        for r in migrated_rows:
+            if _is_universe_member(r, 'opToCapitalQuarter'):
+                v = r['opToCapitalQuarter']
+                count = sum(1 for x in q_vals if x <= v)
+                r['opToCapitalQuarterPercentile'] = round(count / n_q * 100, 2)
+
+    if n_t > 0:
+        for r in migrated_rows:
+            if _is_universe_member(r, 'opToCapitalTTM'):
+                v = r['opToCapitalTTM']
+                count = sum(1 for x in ttm_vals if x <= v)
+                r['opToCapitalTTMPercentile'] = round(count / n_t * 100, 2)
+
+    return {
+        'reference_quarter': reference_quarter,
+        'q_universe_size': n_q,
+        'ttm_universe_size': n_t,
+        'schema_status': schema_status,
+        'action': action,
+        'warnings': warnings,
+    }
