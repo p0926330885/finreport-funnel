@@ -548,6 +548,14 @@ body[data-status="ok"] .status-panel { display: none; }
     <section class="results-panel" aria-label="掃描結果">
       <div class="card template-card">
         <div class="template-title">策略模板</div>
+        <!-- v3.5.3 hotfix: template-row 保留於 DOM 中但隱藏 · 避免 JS getElementById('templateRow') 返回 null 造成 addEventListener crash · 未來重啟只需 (1) 移除下方 template-row 的 style="display:none" (2) 移除 template-maintenance 整個 div -->
+        <div class="template-row" id="templateRow" style="display: none;">
+          <button class="template-chip" data-template="order-pile-up" data-tooltip="合約負債 YoY >30% 且營收 YoY >15%。訂單池累積且認列速度跟得上。">訂單池累積、認列跟上</button>
+          <button class="template-chip" data-template="core-stable" data-tooltip="營益率 ≥8% 且業外占淨利絕對值 <25%。本業獲利健康、業外雜訊小。">本業獲利穩健</button>
+          <button class="template-chip" data-template="three-up" data-tooltip="毛利率、營益率、淨利率 QoQ 全部持平或上升。獲利品質全面改善。">三率同升</button>
+          <button class="template-chip" data-template="momentum-turn" data-tooltip="近 30 天內 3MA 由下穿越 12MA。月營收動能剛剛翻正。">動能轉正</button>
+          <button class="template-chip" data-template="operating-leverage" data-tooltip="營益增速 > 營收增速(固定成本稀釋、獲利爆發狀態)。本模板僅篩選符合狀態之公司,無預設門檻;可自行於左側拉高『毛利率』或『營收 YoY』拉桿提高篩選嚴格度。">營運槓桿釋放</button>
+        </div>
         <div class="template-maintenance">
           <span class="tm-icon">⏸</span>
           <div class="tm-text">
@@ -555,16 +563,6 @@ body[data-status="ok"] .status-panel { display: none; }
             <div class="tm-line2">依「財務指標判讀規範 §1-§3」全面校準後將重新上線 · 敬請期待</div>
           </div>
         </div>
-        <!--
-          v3.5.3 · 策略模板暫停使用 · 保留下方 5 個 chip 在原始碼中 · 未來對齊 tooltip 與 flag 邏輯後 uncomment 即可重新啟用
-          <div class="template-row" id="templateRow">
-            <button class="template-chip" data-template="order-pile-up" data-tooltip="合約負債 YoY >30% 且營收 YoY >15%。訂單池累積且認列速度跟得上。">訂單池累積、認列跟上</button>
-            <button class="template-chip" data-template="core-stable" data-tooltip="營益率 ≥8% 且業外占淨利絕對值 <25%。本業獲利健康、業外雜訊小。">本業獲利穩健</button>
-            <button class="template-chip" data-template="three-up" data-tooltip="毛利率、營益率、淨利率 QoQ 全部持平或上升。獲利品質全面改善。">三率同升</button>
-            <button class="template-chip" data-template="momentum-turn" data-tooltip="近 30 天內 3MA 由下穿越 12MA。月營收動能剛剛翻正。">動能轉正</button>
-            <button class="template-chip" data-template="operating-leverage" data-tooltip="營益增速 > 營收增速(固定成本稀釋、獲利爆發狀態)。本模板僅篩選符合狀態之公司,無預設門檻;可自行於左側拉高『毛利率』或『營收 YoY』拉桿提高篩選嚴格度。">營運槓桿釋放</button>
-          </div>
-        -->
       </div>
 
       <div class="card table-card">
