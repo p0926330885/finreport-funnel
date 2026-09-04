@@ -186,6 +186,51 @@ USE_FULL_UNIVERSE = True
 # 一週跑完全部 · 週而復始
 BATCH_COUNT = 7
 
+# ============================================================
+# v3.5.4-u1: Active Universe (現役上市櫃母體)
+# ============================================================
+# 對應 P1 audit + P2 §四~§十一
+#
+# 產品定義:
+#   Active Universe = B ∩ Official
+#     B = FinMind common stocks (universe.build_universe 產出)
+#     Official = TWSE 現有上市 ∪ TPEx 現有上櫃 (四位純數字 IDs)
+#
+# 官方端點(openapi · 無 auth):
+ACTIVE_UNIVERSE_TWSE_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
+ACTIVE_UNIVERSE_TPEX_URL = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O"
+
+# 官方 payload 中的股票代號 key
+ACTIVE_UNIVERSE_TWSE_ID_KEY = "公司代號"
+ACTIVE_UNIVERSE_TPEX_ID_KEY = "SecuritiesCompanyCode"
+
+# 官方 payload 中的出表日期 key
+ACTIVE_UNIVERSE_TWSE_DATE_KEY = "出表日期"  # 民國 YYYMMDD 格式
+ACTIVE_UNIVERSE_TPEX_DATE_KEY = "Date"      # 民國 YYYMMDD 格式
+
+# HTTP 呼叫參數(對齊 P2 §四:connect/read timeout · bounded retry)
+ACTIVE_UNIVERSE_CONNECT_TIMEOUT = 10       # 秒
+ACTIVE_UNIVERSE_READ_TIMEOUT = 30          # 秒
+ACTIVE_UNIVERSE_MAX_RETRIES = 3
+ACTIVE_UNIVERSE_RETRY_BACKOFF = 3          # 秒(指數 base)
+
+# Schema 最低門檻(對齊 P2 §四:body 必須非空 list + 完整性驗證)
+# 用防護性下限值 · 避免對方端點回 5 檔就發布為有效資料
+ACTIVE_UNIVERSE_MIN_TWSE_COUNT = 800       # 目前 1089 · 500-2000 為合理帶
+ACTIVE_UNIVERSE_MIN_TPEX_COUNT = 600       # 目前 890 · 400-1500 為合理帶
+
+# Drift guard(對齊 P2 §三 + §九)
+# ratio < 5% 接受 · ratio >= 5% 拒絕(邊界 >= 0.05)
+# removed 與 added 分別計算(不只比總數 · 避免同數量大量成分互換)
+ACTIVE_UNIVERSE_DRIFT_MAX_REMOVED_RATIO = 0.05
+ACTIVE_UNIVERSE_DRIFT_MAX_ADDED_RATIO = 0.05
+
+# Last-known-good snapshot 路徑(對齊 P2 §五 · git 追蹤)
+ACTIVE_UNIVERSE_PATH = DATA_DIR / "active_universe.json"
+
+# LKG schema version(未來 schema 演進用)
+ACTIVE_UNIVERSE_SCHEMA_VERSION = 1
+
 # 首版限縮於 SPEC §18.1 20 檔示範清單, USE_FULL_UNIVERSE=False 時使用
 DEMO_UNIVERSE = [
     # 半導體
