@@ -77,8 +77,8 @@ finreport-funnel/
 │   ├── output.py                 # 寫入 JSON
 │   ├── mock_data.py              # 本地測試用
 │   └── __init__.py
-├── .github/workflows/            # GitHub Actions 排程
-│   ├── daily-build.yml           # 每天 22:00 TPE
+├── .github/workflows/            # GitHub Actions 排程(2 個 · 2026-09-06 起)
+
 │   ├── backfill-scheduled.yml    # 每天 03:30 TPE(全市場分批)
 │   └── backfill.yml              # 手動觸發(demo 20 檔)
 ├── docs/                         # 專案設計文件(SPEC + SOP)
@@ -147,7 +147,7 @@ python -m http.server 8000
 - **資料更新頻率**:
   - 財報:季度公布日後隔天更新(3/5/8/11 月中旬)
   - 月營收:每月 10 日左右
-  - Daily build:每天 22:00 TPE 增量更新
+  - 每檔股票每 7 天輪新一次(via backfill-scheduled 7 批接力 · 每天 03:30 TPE 跑一批 · 2026-09-06 起 daily-build 已移除,見 HANDOVER §10-2)
 - **資料範圍**:
   - v1:DEMO_UNIVERSE 20 檔(上市權值股)
   - v2:全市場 ~1,700 檔(規劃中,分 5 批自動接力)
