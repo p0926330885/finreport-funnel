@@ -747,6 +747,83 @@ GitHub Actions → Backfill (Scheduled 7-Batch) → Run workflow → 輸入 batc
 
 **授權**:此專案為個人工具,無公開授權。
 
+## 10. 附錄 · 2026-09 部署變更紀錄
+
+### 10-1 · v3.5.4-u1: Active Universe Cleanup(2026-09-04)
+
+**目的**:Scanner 從 FinMind common(B)prune 為「B ∩ TWSE/TPEx 官方現役名單」,清掉已下市/合併但仍留在 scanner 的死股。
+
+**Commit**:`cb98fc0`(PR #1 squash merge · 2026-09-04 17:19 TPE)
+
+**8 檔異動**:
+
+| 檔案 | 狀態 |
+|---|---|
+| `data/active_universe.json` | 新(Initial LKG) |
+| `pipeline/active_universe.py` | 新(LKG loader + freshness + drift guard) |
+| `pipeline/build.py` | 修(整合 active_universe check + prune) |
+| `pipeline/config.py` | 修(URL / min-count / drift threshold 常數) |
+| `pipeline/tests/test_active_universe.py` | 新(84 tests) |
+| `pipeline/tests/test_p3_r2_blockers.py` | 新(54 tests · P3-r2/r3 regression) |
+| `pipeline/tests/test_build_integration.py` | 新(9 mocked build.run integration tests) |
+| `pipeline/tests/test_adversarial.py` | 新(15 tests) |
+
+**覆核歷程**:P2 → P3(10 blockers)→ P3-r2(5 blockers)→ P3-r3(GO)→ P4 clean-room 通過
+
+**Patch SHA-256**:`457ee674914e3e24d9374334b8c348836f0635fbef9c1b2a4bb04142bceb0d67`
+
+**Initial LKG checksum**:`sha256:0d0ee2556b333eee429f2f1067065f3d0e29e666e6113e38e27feb256b4fbbf8`
+
+**pytest**:214 passed · 3 skipped(clean-room + repo 外部 cwd 雙驗)
+
+**上線後實測**:
+- Scanner 從 2047 檔降至 1973 檔(prune 74 檔死股 · P1 audit 期待 ~72)
+- `active_universe_source` 從 `official_attachment_bootstrap` 升級為 `official_live`
+- Anchor 驗證(前端搜尋):2325 矽品 / 2311 日月光 / 1701 中化 / 1507 永大 / 8427 基勝-KY **已排除** · 3711 日月光投控 / 2882 國泰金 **保留**
+
+### 10-2 · v3.5.4-u2: 移除 daily-build.yml(2026-09-06)
+
+**Commit**:`cea61e1`(直接 commit main)
+
+**原因(有 log 證據)**:
+
+原本 §7-4「已知過渡狀態」段落預估 2026-09-02 之後 daily-build 應穩定成功。實測到 2026-09-06 仍持續 timeout,診斷 log 顯示:
+
+```
+[17:21:11] Ingest progress: 1770 / 1973   ← cache hit 段 · 快
+[17:22:49] Ingest progress: 1780 / 1973   ← cache miss 起點 · 慢
+[17:26:25] Ingest progress: 1790 / 1973   ← 每 10 檔要 216 秒
+[17:30:01] Ingest progress: 1800 / 1973
+...
+[18:06:01] Ingest progress: 1900 / 1973
+Error: The operation was canceled.       ← 90 分 timeout
+```
+
+**Root cause**:FinMind 免費層 rate limit ≈ 170 stocks/hr for cache miss。即使 cache hit 率達 89.7%,剩下 ~200 檔 miss × 21.6 秒/檔 = 72 分鐘,加上其他 stage 超過 90 分 timeout 上限。這是**結構性瓶頸**,延長 timeout 治標不治本。
+
+**影響**:
+- Production 資料更新頻率從「daily 22:00 全刷」降為「每 7 天輪一次 via backfill-scheduled」
+- 新月營收/季報最壞延遲 7 天可見(原設計 1 天)
+- Production 站點運作**不受影響**(backfill-scheduled 涵蓋)
+- 事實上 daily-build 已連續數週 timeout,production 早就靠 backfill-scheduled 撐著
+
+**若未來想恢復 daily 頻率的選項**:
+- **A**:升級 FinMind 付費層(rate limit 提升)
+- **B**:在 pipeline.ingest 加平行處理(需重寫 ingest logic)
+- **C**:縮小 daily universe 只涵蓋高變動股(需重新設計 filter)
+- **D**:改成分批 `--batch` 模式(跟 backfill-scheduled 完全重複,不建議)
+
+**§7-4 章節註記**:「已知過渡狀態」段落寫於 2026-08-24,預估「2026-09-02 之後 daily-build 應穩定」是樂觀估計,實測未達成。u2 為此決策的最終處置。
+
+### 10-3 · 現況 Workflow 清單(2026-09-06 起)
+
+| Workflow | 觸發 | 用途 | 耗時 |
+|---|---|---|---|
+| `backfill.yml` | 手動 workflow_dispatch | dev / 指定股票 rebuild · 支援 `stocks` 逗號分隔輸入 | 5-10 分鐘 |
+| `backfill-scheduled.yml` | Cron `30 19 * * *`(UTC)= 03:30 TPE | 7 批接力 · 每天跑一批 · production 唯一資料寫入管道 | 90-120 分鐘/批 |
+
+**~~`daily-build.yml`~~** 已於 2026-09-06 移除(§10-2)。
+
 ---
 
 **End of HANDOVER.md** · 讀完你已經是這個專案的 90% 專家 · 剩下 10% 邊做邊學
