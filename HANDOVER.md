@@ -99,8 +99,8 @@ Pipeline 產出的 JSON 檔案存放在 repo 的 `data/` 目錄下,由 GitHub Pa
 finreport-funnel/
 ├── .github/workflows/
 │   ├── backfill.yml               # 手動 workflow_dispatch (dev/test)
-│   ├── backfill-scheduled.yml     # v3.4 Phase 2: 每日 03:30 TPE 7 批接力
-│   └── daily-build.yml            # 日常增量 22:00 TPE
+│   └── backfill-scheduled.yml     # v3.4 Phase 2: 每日 03:30 TPE 7 批接力
+
 ├── pipeline/
 │   ├── build.py                   # 主入口 (--daily / --backfill / --batch N)
 │   ├── config.py                  # 常數 + INDUSTRY_MAP + BATCH_COUNT
@@ -391,13 +391,14 @@ if (industryNotes[stock.industry]) {
 
 ## 6. 自動化排程與維護手冊
 
-### 6-1 · 三個 GitHub Actions Workflow
+### 6-1 · 兩個 GitHub Actions Workflow(2026-09-06 起)
 
 | Workflow | 觸發 | 用途 | 耗時 |
 |---|---|---|---|
 | `backfill.yml` | 手動 workflow_dispatch | dev / 指定股票 rebuild · 支援 `stocks` 逗號分隔輸入(cache hit) | 5-10 分鐘 (20 檔 cache hit) |
-| `backfill-scheduled.yml` | Cron `30 19 * * *` (UTC) = 03:30 TPE | Phase 2: 7 批接力,每天跑一批 | 90-120 分鐘/批 |
-| `daily-build.yml` | Cron `0 14 * * *` (UTC) = 22:00 TPE | 日常增量更新(cache 生效) | 30-60 分鐘 |
+| `backfill-scheduled.yml` | Cron `30 19 * * *` (UTC) = 03:30 TPE | Phase 2: 7 批接力,每天跑一批 · **production 唯一資料寫入管道** |
+
+**~~`daily-build.yml`~~** 已於 2026-09-06 移除 · root cause 見 §10-2。
 
 **`backfill.yml` v3.4 升級用法**(2026-08-25):
 
@@ -599,6 +600,9 @@ GitHub Actions → Backfill (Scheduled 7-Batch) → Run workflow → 輸入 batc
 | 2026-08-25 22:00 | 首次 Phase 2 版 daily-build 執行(見下方過渡狀態) | 見 GitHub Actions |
 | 2026-08-26 03:30 | 首次 scheduled-backfill batch 執行 · batch = 238 % 7 = **0**(stocks[0:243]) | 見 GitHub Actions |
 | 2026-09-01 03:30 | 最後一批(batch 6)執行 · `scanner_index.json` 累積為完整全市場 ~1,700 檔 | 見 GitHub Actions |
+| 2026-09-04 17:19 | **v3.5.4-u1 上線 · Active Universe Cleanup**:Scanner 從 2047 檔 prune 為 1973 檔(B ∩ Official)· source=`official_live` · 8 檔 diff · pytest 214 passed · 詳見 §10-1 | PR #1 · commit `cb98fc0` |
+| 2026-09-06 | **v3.5.4-u2:移除 daily-build.yml**:實測 90 分 timeout 為結構性瓶頸(FinMind 免費層 rate limit · log 證據見 §10-2) | commit `cea61e1` |
+| 2026-09-06 | **u3:HANDOVER.md 補 §10 + 各節 stale reference 清理** | 本 commit |
 
 ### 7-4 · 已知邊界情境
 
@@ -674,6 +678,8 @@ GitHub Actions → Backfill (Scheduled 7-Batch) → Run workflow → 輸入 batc
 - 保留(4 個 · 已中性或已用免責式):M01 業外美化(中性)· M02 業外拖累(已用「可能為」)· M05 殺價搶單(已用「或」)· M11 薄利多銷(中性 pattern)
 - 相關檔案:`pipeline/transform.py::_build_mode_text`
 - 生效方式:改後不需重跑,隨排程自動用新模板產出 detail JSON
+
+> **⚠️ 2026-09-06 補記**:此段的樂觀預估**未達成** · 實測到 2026-09-06 daily-build 仍持續 timeout · 詳見 §10-2 root cause 分析與最終處置(已移除 daily-build.yml)· 以下原文保留供歷史參考,勿據此判斷現狀。
 
 **⚠️ 已知過渡狀態(2026-08-25 ~ 08-31 · 約 6-7 天)**:
 
