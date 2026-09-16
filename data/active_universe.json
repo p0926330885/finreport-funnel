@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-16T06:24:46+0800",
+  "generated_at": "2026-09-17T06:16:41+0800",
   "source": "official_live",
   "twse_url": "https://openapi.twse.com.tw/v1/opendata/t187ap03_L",
   "tpex_url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O",
-  "twse_as_of": "2026-09-15",
-  "tpex_as_of": "2026-09-15",
-  "official_as_of": "2026-09-15",
+  "twse_as_of": "2026-09-16",
+  "tpex_as_of": "2026-09-16",
+  "official_as_of": "2026-09-16",
   "twse_count": 1088,
-  "tpex_count": 891,
-  "official_active_size": 1979,
+  "tpex_count": 892,
+  "official_active_size": 1980,
   "twse_ids": [
     "1101",
     "1102",
@@ -1165,6 +1165,7 @@
     "2924",
     "2926",
     "2937",
+    "2938",
     "2941",
     "2947",
     "2948",
@@ -2565,6 +2566,7 @@
     "2926",
     "2929",
     "2937",
+    "2938",
     "2939",
     "2941",
     "2945",
@@ -3974,5 +3976,5 @@
     "9960",
     "9962"
   ],
-  "ids_checksum": "sha256:4985b84654fd8c8a1dfb1360116527f84a8e7bec0e3806b161ff961d6122e400"
+  "ids_checksum": "sha256:e563ffaa063e7757e601d23d9449f0ac274849fe1dd5e2f32cd5cc2e2aa94cda"
 }
