@@ -475,7 +475,7 @@ body[data-status="ok"] .status-panel { display: none; }
         <div class="field">
           <label for="industrySelect">產業</label>
           <select id="industrySelect" data-tooltip="以產業維度過濾。單層下拉,不做 drill-down。">
-            <option value="all">全部</option><option value="semi">半導體</option><option value="component">電子零組件</option><option value="integration">系統整合</option><option value="chemical">化工</option><option value="biotech">生技</option><option value="machinery">機械</option><option value="traditional">傳產</option><option value="finance">金融</option>
+            <option value="all">全部</option><option value="semi">半導體</option><option value="component">電子零組件</option><option value="integration">系統整合</option><option value="chemical">化工</option><option value="biotech">生技</option><option value="machinery">機械</option><option value="construction">營建</option><option value="utility">公用事業</option><option value="traditional">傳產</option><option value="finance">金融</option>
           </select>
         </div>
         <div class="field">
@@ -626,7 +626,7 @@ function applyMetaToTopbar() {
 }
 document.getElementById('retryBtn')?.addEventListener('click', () => location.reload());
 
-const industries = { all: '全部', semi: '半導體', component: '電子零組件', integration: '系統整合', chemical: '化工', biotech: '生技', machinery: '機械', traditional: '傳產', finance: '金融' };
+const industries = { all: '全部', semi: '半導體', component: '電子零組件', integration: '系統整合', chemical: '化工', biotech: '生技', machinery: '機械', construction: '營建', utility: '公用事業', traditional: '傳產', finance: '金融' };
 const rangeDefs = {
   gm: { label: '毛利率', min: 0, max: 100, step: 1, unit: '%' },
   om: { label: '營益率', min: -20, max: 100, step: 1, unit: '%' },
