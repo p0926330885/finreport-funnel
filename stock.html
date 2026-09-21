@@ -2700,7 +2700,7 @@ async function boot() {
     await loadMeta();
     applyMetaToTopbar();
     // === Layer 3.5 fix: 更新 hero / title / topbar 搜尋框 ===
-    const industryMap = { semi: '半導體', component: '電子零組件', integration: '系統整合', chemical: '化工', biotech: '生技', machinery: '機械', traditional: '傳產', finance: '金融' };
+    const industryMap = { semi: '半導體', component: '電子零組件', integration: '系統整合', chemical: '化工', biotech: '生技', machinery: '機械', construction: '營建', utility: '公用事業', traditional: '傳產', finance: '金融' };
     document.title = `${stock.name} ${stock.id} · 財報轉化漏斗`;
     const heroId = document.querySelector('.hero-id');
     const heroName = document.querySelector('.hero-name');
