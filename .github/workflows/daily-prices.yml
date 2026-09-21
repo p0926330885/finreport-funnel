@@ -1,0 +1,60 @@
+name: Daily Prices (近期K棒)
+
+# ============================================================
+# v3.6 · 每個交易日收盤後抓官方全市場日行情 → data/prices_recent.json
+#   - 來源:證交所 STOCK_DAY_ALL + 櫃買 daily_close_quotes(不耗 FinMind 額度)
+#   - 只改 1 個檔案,幾十秒就跑完
+#   - 用途:選股頁「近3日」迷你K棒、個股頁 K 線補最新幾天
+# ============================================================
+
+on:
+  schedule:
+    # 週一~週五 台北 18:30(UTC 10:30)
+    - cron: "30 10 * * 1-5"
+    # 保險:台北 21:30 再跑一次(官方晚更新時補上 · 同一天重跑不會重複)
+    - cron: "30 13 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-prices
+  cancel-in-progress: false
+
+jobs:
+  daily-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Update prices_recent.json
+        run: python -m pipeline.prices
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/prices_recent.json
+          if git diff --cached --quiet; then
+            echo "No price changes"
+            exit 0
+          fi
+          git commit -m "Daily prices · $(TZ=Asia/Taipei date +%Y-%m-%d)"
+          # 若 backfill 剛好也推了 → 先 rebase 再推(最多重試 3 次)
+          for i in 1 2 3; do
+            git pull --rebase --autostash && git push && exit 0
+            sleep 10
+          done
+          exit 1
