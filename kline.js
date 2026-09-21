@@ -13,9 +13,16 @@
   const DOWN = '#089981';    // 綠跌
   const MA_COLORS = ['#f5c542', '#c084fc', '#38bdf8', '#fb923c'];
   const MA_DEFAULT = [{ p: 10, on: true }, { p: 20, on: true }, { p: 60, on: true }, { p: 200, on: true }];
-  const RANGES = { '3M': 63, '6M': 126, '1Y': 250, '3Y': 750, 'ALL': Infinity };
+  // 各週期下「區間按鈕」對應要顯示幾根 K 棒
+  const RANGES = {
+    D: { '3M': 63, '6M': 126, '1Y': 250, '3Y': 750, 'ALL': Infinity },
+    W: { '3M': 13, '6M': 26, '1Y': 52, '3Y': 156, 'ALL': Infinity },
+    M: { '3M': 3, '6M': 6, '1Y': 12, '3Y': 36, 'ALL': Infinity },
+  };
+  const IV_LABEL = { D: '日', W: '週', M: '月' };
   const LS_MA = 'klineMA.v1';
   const LS_RANGE = 'klineRange.v1';
+  const LS_IV = 'klineInterval.v1';
   const INITIAL_YEARS = 4;   // 先載 4 年(3 年視窗 + 200 日均線暖機),往左捲再自動補
 
   const store = {
@@ -53,6 +60,35 @@
   function pxDigits(v) { return v >= 1000 ? 0 : v >= 100 ? 1 : 2; }
   function fmtPx(v) { return v == null ? '—' : fmtNum(v, pxDigits(v) === 0 ? 0 : 2); }
 
+  // 日K → 週K / 月K(時間標在該週/該月第一個交易日 · 量加總)
+  function weekKey(iso) {
+    const d = new Date(iso + 'T00:00:00Z');
+    const dow = (d.getUTCDay() + 6) % 7;             // 週一 = 0
+    d.setUTCDate(d.getUTCDate() - dow);
+    return d.toISOString().slice(0, 10);
+  }
+  function aggregate(daily, iv) {
+    if (iv === 'D') return daily;
+    const keyOf = iv === 'W' ? weekKey : (iso => iso.slice(0, 7));
+    const out = [];
+    let cur = null, curKey = null;
+    for (const b of daily) {
+      const k = keyOf(b[0]);
+      if (k !== curKey) {
+        if (cur) out.push(cur);
+        cur = [b[0], b[1], b[2], b[3], b[4], b[5]];
+        curKey = k;
+      } else {
+        cur[2] = Math.max(cur[2], b[2]);
+        cur[3] = Math.min(cur[3], b[3]);
+        cur[4] = b[4];
+        cur[5] += b[5];
+      }
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+
   function sma(bars, period) {
     const out = [];
     let sum = 0;
@@ -79,7 +115,10 @@
     const allYears = idx && Array.isArray(idx.years) ? idx.years.slice().sort((a, b) => a - b) : [];
     const loadedYears = new Set();
     const byDate = new Map();
+    let daily = [];
     let bars = [];
+    let iv = store.get(LS_IV, 'D');
+    if (!(iv in RANGES)) iv = 'D';
 
     async function loadYears(years) {
       const todo = years.filter(y => !loadedYears.has(y));
@@ -92,11 +131,13 @@
       return true;
     }
     function rebuildBars() {
-      bars = Array.from(byDate.values()).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+      daily = Array.from(byDate.values()).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+      bars = aggregate(daily, iv);
     }
     const olderYearsLeft = () => allYears.filter(y => !loadedYears.has(y));
 
-    await loadYears(allYears.slice(-INITIAL_YEARS));
+    // 週K/月K 需要較長歷史 → 直接載入全部年份(每年一個小檔)
+    await loadYears(iv === 'D' ? allYears.slice(-INITIAL_YEARS) : allYears);
     const recent = await loadRecent();
     const recentBars = recent && recent.bars && recent.bars[stockId];
     if (Array.isArray(recentBars)) {
@@ -112,7 +153,8 @@
     }
     showMsg('');
     const sub = document.getElementById('klineSub');
-    if (sub) sub.textContent = `日K · 紅漲綠跌 · 資料至 ${bars[bars.length - 1][0]}`;
+    const updateSub = () => { if (sub) sub.textContent = `${IV_LABEL[iv]}K · 紅漲綠跌 · 資料至 ${daily[daily.length - 1][0]}`; };
+    updateSub();
 
     // ---------- 圖表 ----------
     const chart = LC.createChart(box, {
@@ -189,7 +231,7 @@
         return `<span style="color:${MA_COLORS[k]}">MA${m.p} ${pt ? fmtPx(pt.value) : '—'}</span>`;
       }).join('');
       legend.innerHTML =
-        `<div class="kl-row"><span class="kl-date">${b[0]}</span>` +
+        `<div class="kl-row"><span class="kl-date">${iv === 'M' ? b[0].slice(0, 7) : iv === 'W' ? b[0] + ' 週' : b[0]}</span>` +
         `<span>開 <b class="${cls}">${fmtPx(b[1])}</b></span><span>高 <b class="${cls}">${fmtPx(b[2])}</b></span>` +
         `<span>低 <b class="${cls}">${fmtPx(b[3])}</b></span><span>收 <b class="${cls}">${fmtPx(b[4])}</b></span>` +
         (chg == null ? '' : `<span class="${cls}">${sign}${fmtPx(chg)} (${sign}${pct.toFixed(2)}%)</span>`) +
@@ -244,11 +286,11 @@
     // ---------- 區間切換 ----------
     const rangeBox = document.getElementById('klineRange');
     let range = store.get(LS_RANGE, '1Y');
-    if (!(range in RANGES)) range = '1Y';
+    if (!(range in RANGES.D)) range = '1Y';
     async function setRange(key) {
       range = key; store.set(LS_RANGE, key);
       if (rangeBox) rangeBox.querySelectorAll('[data-range]').forEach(b => b.classList.toggle('active', b.dataset.range === key));
-      const need = RANGES[key];
+      const need = RANGES[iv][key];
       if (need === Infinity) {
         if (await loadYears(olderYearsLeft())) { rebuildBars(); reindex(); setAllData(); }
         chart.timeScale().fitContent();
@@ -267,6 +309,24 @@
       const b = e.target.closest('[data-range]');
       if (b) setRange(b.dataset.range);
     });
+
+    // ---------- 日 / 週 / 月 切換 ----------
+    const ivBox = document.getElementById('klineInterval');
+    function markIv() {
+      if (ivBox) ivBox.querySelectorAll('[data-iv]').forEach(b => b.classList.toggle('active', b.dataset.iv === iv));
+    }
+    async function setInterval_(key) {
+      if (!(key in RANGES) || key === iv) return;
+      iv = key; store.set(LS_IV, key); markIv();
+      if (iv !== 'D') await loadYears(olderYearsLeft());
+      rebuildBars(); reindex(); setAllData(); updateSub();
+      await setRange(range);
+    }
+    if (ivBox) ivBox.addEventListener('click', e => {
+      const b = e.target.closest('[data-iv]');
+      if (b) setInterval_(b.dataset.iv);
+    });
+    markIv();
 
     // ---------- 往左捲到底 → 自動載入更早年份 ----------
     let loadingOlder = false;

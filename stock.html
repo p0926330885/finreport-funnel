@@ -1439,6 +1439,7 @@ body[data-status="ok"] .status-panel { display: none; }
    v3.6 · K 線圖
    ========================================================= */
 .kline-card .card-head { flex-wrap: wrap; gap: 10px; }
+.kline-toggles { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .kline-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 10px; }
 .kl-ma-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .kl-ma-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px 3px 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); font: 500 11px var(--font-num); color: var(--text-dim); cursor: default; }
@@ -1518,8 +1519,11 @@ body[data-status="ok"] .status-panel { display: none; }
   <!-- v3.6: K 線圖 -->
   <section class="card kline-card" id="klineCard">
     <div class="card-head">
-      <div><h3 class="section-title" tabindex="0" data-tooltip="日K 線 · 紅漲綠跌(台股慣例)。滾輪縮放、拖曳平移,往左捲到底會自動載入更早的資料。下方為成交量(張)。">股價走勢</h3><p id="klineSub">日K · 紅漲綠跌</p></div>
-      <div class="period-toggle" id="klineRange" aria-label="顯示區間"><button data-range="3M">3M</button><button data-range="6M">6M</button><button data-range="1Y">1Y</button><button data-range="3Y">3Y</button><button data-range="ALL">全部</button></div>
+      <div><h3 class="section-title" tabindex="0" data-tooltip="日/週/月 K 線 · 紅漲綠跌(台股慣例)。均線天數在日K代表日、週K代表週、月K代表月。滾輪縮放、拖曳平移,往左捲到底會自動載入更早的資料。下方為成交量(張)。">股價走勢</h3><p id="klineSub">日K · 紅漲綠跌</p></div>
+      <div class="kline-toggles">
+        <div class="period-toggle" id="klineInterval" aria-label="K 線週期"><button data-iv="D">日</button><button data-iv="W">週</button><button data-iv="M">月</button></div>
+        <div class="period-toggle" id="klineRange" aria-label="顯示區間"><button data-range="3M">3M</button><button data-range="6M">6M</button><button data-range="1Y">1Y</button><button data-range="3Y">3Y</button><button data-range="ALL">全部</button></div>
+      </div>
     </div>
     <div class="kline-toolbar"><div class="kl-ma-controls" id="klineMaControls"></div></div>
     <div class="kline-wrap">
