@@ -287,6 +287,9 @@ a { color: inherit; text-decoration: none; }
 .results-table td:nth-child(2), .results-table td:nth-child(4) { font-family: var(--font-ui); }
 /* v3.6: 近3日迷你K棒 */
 .results-table td.k3-cell { padding: 0 6px; line-height: 0; }
+/* v3.6.4: 整格都是連結(可右鍵開新分頁)· 外觀維持原樣 */
+.results-table td .cell-link { display: flex; align-items: center; justify-content: flex-end; min-height: 54px; color: inherit; text-decoration: none; }
+.results-table td:nth-child(-n+4) .cell-link { justify-content: flex-start; }
 .mini-k { display: inline-block; vertical-align: middle; overflow: visible; }
 .mini-k-empty { color: var(--text-muted); font: 500 12px var(--font-num); }
 .mini-k-stale { opacity: 0.35; }
@@ -944,6 +947,11 @@ function navigateToStock(id, event) {
   if (event?.metaKey || event?.ctrlKey) window.open(url, '_blank');
   else location.href = url;
 }
+// v3.6.4: 每格內容包成真正的 <a> 連結 → 右鍵可「在新分頁中開啟」、中鍵開新分頁
+function linkCell(tdHtml, id) {
+  return tdHtml.replace(/^(<td[^>]*>)([\s\S]*)(<\/td>)$/,
+    (m, open, inner, close) => `${open}<a class="cell-link" href="stock.html?id=${id}" tabindex="-1">${inner}</a>${close}`);
+}
 // v3.4 P0: 桌面表格 cell render(依 column key 分派)
 function renderCell(stock, column, revUnit) {
   const v = stock[column.key];
@@ -1019,7 +1027,7 @@ function renderResults() {
 
   // 桌面版 · 動態 tbody
   document.getElementById('resultsBody').innerHTML = rows.map(stock =>
-    `<tr data-stock-id="${stock.id}" tabindex="0" aria-label="查看 ${stock.id} ${stock.name}">${columns.map(column => renderCell(stock, column, revUnit)).join('')}</tr>`
+    `<tr data-stock-id="${stock.id}" tabindex="0" aria-label="查看 ${stock.id} ${stock.name}">${columns.map(column => linkCell(renderCell(stock, column, revUnit), stock.id)).join('')}</tr>`
   ).join('');
 
   // 手機版 · header + 2x2 grid + footer dynamic chips
@@ -1207,7 +1215,7 @@ function bindControls() {
     else { state.sortKey = key; state.sortDir = ['name', 'industry', 'id'].includes(key) ? 'asc' : 'desc'; }
     state.page = 1; renderAll(); syncUrl('push');
   });
-  document.getElementById('resultsBody').addEventListener('click', event => { const row = event.target.closest('[data-stock-id]'); if (row) navigateToStock(row.dataset.stockId, event); });
+  document.getElementById('resultsBody').addEventListener('click', event => { if (event.target.closest('a.cell-link')) return; const row = event.target.closest('[data-stock-id]'); if (row) navigateToStock(row.dataset.stockId, event); });
   document.getElementById('resultsBody').addEventListener('keydown', event => { const row = event.target.closest('[data-stock-id]'); if (row && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); navigateToStock(row.dataset.stockId, event); } });
   document.getElementById('pager').addEventListener('click', event => { const button = event.target.closest('[data-page]'); if (!button || button.disabled) return; state.page = Number(button.dataset.page); renderAll(); syncUrl('push'); });
   document.getElementById('mobileFilterButton').addEventListener('click', openDrawer);
