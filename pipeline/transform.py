@@ -690,8 +690,21 @@ def build_detail(client: FinMindClient, stock_id: str, universe_df: pd.DataFrame
         return None
     info = info_rows.iloc[0]
     name = info.get("stock_name", "")
-    raw_industry = info.get("industry_category", "")
-    industry = config.INDUSTRY_MAP.get(raw_industry, config.INDUSTRY_DEFAULT)
+    # FinMind TaiwanStockInfo 同一檔股票常有多列(如「電腦及週邊設備業」+「電子工業」),
+    # 不能只取第一列 · 優先挑能對到非 traditional 的細產業
+    raw_list = [str(x).strip() for x in info_rows["industry_category"].dropna().tolist()]
+    raw_industry, industry = "", config.INDUSTRY_DEFAULT
+    for raw in raw_list:
+        code = config.INDUSTRY_MAP.get(raw)
+        if code and code != config.INDUSTRY_DEFAULT:
+            raw_industry, industry = raw, code
+            break
+    else:
+        for raw in raw_list:
+            if raw and raw not in config.INDUSTRY_GENERIC:
+                raw_industry = raw
+                industry = config.INDUSTRY_MAP.get(raw, config.INDUSTRY_DEFAULT)
+                break
     market_raw = str(info.get("type", "")).lower()
     market = "twse" if "twse" in market_raw or market_raw == "twse" else "otc"
 
