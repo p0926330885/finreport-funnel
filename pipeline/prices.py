@@ -4,12 +4,15 @@
 兩條資料線:
   1. 歷史日K  data/prices/{id}/{year}.json + data/prices/{id}/index.json
      - 來源:FinMind TaiwanStockPrice(每檔 1 次 API 呼叫)
-     - 時機:跟著既有 7 批 backfill 輪流更新(每檔每週 1 次)
-     - 首次:從 PRICE_HISTORY_START 抓全部;之後只重抓「最後一筆所在年份」起
+     - 時機:跟著既有 7 批 backfill 輪流更新(每檔每週輪到 1 次)
+     - 首次:從 PRICE_HISTORY_START 抓全部(每檔 1 次 FinMind)
+     - v3.6.1 省額度:之後輪到時,若 prices_recent.json(官方每日資料)能無縫接上歷史檔,
+       就直接用官方資料延長歷史 → 0 次 FinMind;每 FINMIND_VERIFY_DAYS 天才向 FinMind 對帳一次
      - 過去年份寫一次就不再變動 · 只有當年檔會被覆寫(控制 git 體積)
 
   2. 近期日K  data/prices_recent.json(全市場單一檔)
-     - 來源:證交所 STOCK_DAY_ALL + 櫃買 daily_close_quotes(官方 openapi · 不耗 FinMind 額度)
+     - 來源:證交所 STOCK_DAY_ALL(官網 rwd + openapi 兩個都抓)+ 櫃買 daily_close_quotes
+       (官方資料 · 不耗 FinMind 額度)· v3.6.1:證交所 openapi 會晚一天,官網 rwd 版收盤後就更新
      - 時機:每個交易日收盤後(.github/workflows/daily-prices.yml)
      - 用途:選股頁「近3日」迷你K棒 + 個股頁 K 線補上歷史檔之後的最新幾天
 
@@ -44,7 +47,12 @@ PRICES_RECENT_PATH: Path = config.DATA_DIR / "prices_recent.json"
 # prices_recent.json 每檔保留幾根
 RECENT_KEEP_BARS = 10
 
+# 用官方每日資料延長歷史時,多久一定要向 FinMind 重新對帳一次(天)
+FINMIND_VERIFY_DAYS = 28
+
 TWSE_DAY_ALL_URL = "https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL"
+# 證交所官網版(收盤後約 14:30 起就是當天資料;openapi 版要到隔天才更新)
+TWSE_RWD_DAY_ALL_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json"
 TPEX_DAY_ALL_URL = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
 MIN_TWSE_BARS = 800
 MIN_TPEX_BARS = 500
@@ -186,15 +194,69 @@ def write_history(stock_id: str, bars: list[list], fetch_start: str,
         "last": bars[-1][0],
         "years": sorted(years),
         "updated": datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M"),
+        "verified": datetime.now(TAIPEI_TZ).date().isoformat(),   # 最近一次 FinMind 對帳
     }
     _write_json(sdir / "index.json", idx)
     return idx
+
+
+_recent_cache: Optional[dict] = None
+
+
+def _recent_bars(stock_id: str) -> list[list]:
+    global _recent_cache
+    if _recent_cache is None:
+        data = _read_json(PRICES_RECENT_PATH)
+        _recent_cache = data.get("bars", {}) if isinstance(data, dict) else {}
+    rows = _recent_cache.get(stock_id) or []
+    return [b for b in rows if isinstance(b, list) and len(b) == 6]
+
+
+def extend_from_recent(stock_id: str, idx: Optional[dict]) -> bool:
+    """
+    v3.6.1 省 FinMind:用官方每日資料(prices_recent)延長歷史檔。
+    條件:歷史檔存在 · 最近一次 FinMind 對帳在 FINMIND_VERIFY_DAYS 天內 ·
+          官方資料最早一根 <= 歷史最後一天(有重疊 = 中間沒有缺口)
+    """
+    if not idx or idx.get("start") != PRICE_HISTORY_START or not idx.get("last"):
+        return False
+    verified = str(idx.get("verified") or "")[:10]
+    today = datetime.now(TAIPEI_TZ).date()
+    try:
+        if not verified or (today - date.fromisoformat(verified)).days >= FINMIND_VERIFY_DAYS:
+            return False
+    except ValueError:
+        return False
+    recent = _recent_bars(stock_id)
+    last = str(idx["last"])
+    if not recent or recent[0][0] > last:
+        return False                       # 沒資料或有缺口 → 交給 FinMind
+    newer = [b for b in recent if b[0] > last]
+    if not newer:
+        return True                        # 已是最新 · 不用動
+    years = sorted({int(b[0][:4]) for b in newer})
+    sdir = _stock_dir(stock_id)
+    for y in years:
+        rows = _read_json(sdir / f"{y}.json") or []
+        by_date = {b[0]: b for b in rows if isinstance(b, list) and len(b) == 6}
+        for b in newer:
+            if int(b[0][:4]) == y:
+                by_date[b[0]] = b
+        _write_json(sdir / f"{y}.json", [by_date[d] for d in sorted(by_date)])
+    idx = dict(idx)
+    idx["last"] = newer[-1][0]
+    idx["years"] = sorted(set(int(y) for y in idx.get("years", [])) | set(years))
+    idx["updated"] = datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M")
+    _write_json(sdir / "index.json", idx)
+    return True
 
 
 def update_price_history(client, stock_id: str) -> bool:
     """給 build.py 在每檔處理時呼叫 · 永不 raise(K 線失敗不影響財報主流程)"""
     try:
         idx = load_index(stock_id)
+        if extend_from_recent(stock_id, idx):
+            return True                    # 0 次 FinMind
         start = _fetch_start(idx)
         rows = client.fetch(PRICE_DATASET, data_id=stock_id, start_date=start)
         bars = finmind_rows_to_bars(rows)
@@ -254,6 +316,34 @@ def parse_twse_day_all(data: Any, fallback_date: Optional[str] = None) -> dict[s
     return out
 
 
+def parse_twse_rwd(payload: Any) -> dict[str, list]:
+    """證交所官網版:{"stat":"OK","date":"20260921","fields":[...],"data":[[...],...]}"""
+    out: dict[str, list] = {}
+    if not isinstance(payload, dict) or str(payload.get("stat", "")).upper() != "OK":
+        return out
+    d = parse_roc_or_iso(payload.get("date"))
+    fields = payload.get("fields") or []
+    rows = payload.get("data") or []
+    if not d or not isinstance(fields, list):
+        return out
+    pos = {str(f).strip(): i for i, f in enumerate(fields)}
+    need = ["證券代號", "開盤價", "最高價", "最低價", "收盤價", "成交股數"]
+    if any(k not in pos for k in need):
+        log.warning("TWSE rwd 欄位不符:%s", fields)
+        return out
+    for r in rows:
+        if not isinstance(r, list) or len(r) < len(fields):
+            continue
+        sid = str(r[pos["證券代號"]]).strip()
+        if not (len(sid) == 4 and sid.isdigit()):
+            continue
+        bar = make_bar(d, r[pos["開盤價"]], r[pos["最高價"]], r[pos["最低價"]],
+                       r[pos["收盤價"]], r[pos["成交股數"]])
+        if bar:
+            out[sid] = bar
+    return out
+
+
 def parse_tpex_day_all(data: Any, fallback_date: Optional[str] = None) -> dict[str, list]:
     out: dict[str, list] = {}
     for r in data if isinstance(data, list) else []:
@@ -295,19 +385,22 @@ def merge_recent(existing: Optional[dict], new_bars: dict[str, list],
                  tail_loader=None, keep: int = RECENT_KEEP_BARS) -> dict:
     """
     existing: 舊的 prices_recent.json 內容
-    new_bars: {stock_id: bar} 今天官方資料
-    tail_loader(stock_id, n): 冷啟動時從歷史檔補的函式(可為 None)
+    new_bars: {stock_id: bar 或 [bar, bar...]} 官方資料
+    tail_loader(stock_id, n): 從歷史檔補缺的函式(可為 None · 官方資料優先)
     """
     old = (existing or {}).get("bars", {}) if isinstance(existing, dict) else {}
     ids = set(old) | set(new_bars)
     merged: dict[str, list] = {}
     for sid in sorted(ids):
         by_date = {b[0]: b for b in old.get(sid, []) if isinstance(b, list) and len(b) == 6}
-        if tail_loader and len(by_date) < keep:
+        if tail_loader:
+            # v3.6.1:每次都拿歷史檔補洞(某天排程漏跑 → 批次更新歷史後自動補回)
             for b in tail_loader(sid, keep):
                 by_date.setdefault(b[0], b)
-        if sid in new_bars:
-            by_date[new_bars[sid][0]] = new_bars[sid]
+        nb = new_bars.get(sid)
+        if nb:
+            for b in (nb if isinstance(nb[0], list) else [nb]):
+                by_date[b[0]] = b
         rows = [by_date[d] for d in sorted(by_date)][-keep:]
         if rows:
             merged[sid] = rows
@@ -331,7 +424,9 @@ def run_daily() -> int:
     new_bars: dict[str, list] = {}
     ok_sources = 0
     for name, url, parser, min_n in (
-        ("TWSE", TWSE_DAY_ALL_URL, parse_twse_day_all, MIN_TWSE_BARS),
+        # 證交所兩個版本都抓:官網 rwd 當天就更新 · openapi 晚一天(兩者日期不同時兩天都收)
+        ("TWSE-rwd", TWSE_RWD_DAY_ALL_URL, lambda j, fallback_date=None: parse_twse_rwd(j), MIN_TWSE_BARS),
+        ("TWSE-openapi", TWSE_DAY_ALL_URL, parse_twse_day_all, MIN_TWSE_BARS),
         ("TPEx", TPEX_DAY_ALL_URL, parse_tpex_day_all, MIN_TPEX_BARS),
     ):
         try:
@@ -344,11 +439,12 @@ def run_daily() -> int:
             log.error("%s 只解析到 %d 檔(< %d)· 可能欄位格式改變,這次不採用", name, len(bars), min_n)
             continue
         log.info("%s: %d 檔 · 日期 %s", name, len(bars), sorted(dates))
-        new_bars.update(bars)
+        for sid, b in bars.items():
+            new_bars.setdefault(sid, []).append(b)
         ok_sources += 1
 
     if ok_sources == 0:
-        log.error("兩個來源都失敗 · 不寫檔")
+        log.error("所有來源都失敗 · 不寫檔")
         return 1
 
     merged = merge_recent(_read_json(PRICES_RECENT_PATH), new_bars, tail_loader=read_history_tail)

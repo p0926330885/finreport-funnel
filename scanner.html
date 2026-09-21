@@ -289,6 +289,7 @@ a { color: inherit; text-decoration: none; }
 .results-table td.k3-cell { padding: 0 6px; line-height: 0; }
 .mini-k { display: inline-block; vertical-align: middle; overflow: visible; }
 .mini-k-empty { color: var(--text-muted); font: 500 12px var(--font-num); }
+.mini-k-stale { opacity: 0.35; }
 .stock-card-k3 { flex: 0 0 auto; line-height: 0; margin-right: 4px; }
 .results-table tbody tr { cursor: pointer; transition: background 0.12s; }
 .results-table tbody tr:hover { background: var(--row-hover-bg); }
@@ -599,13 +600,14 @@ body[data-status="ok"] .status-panel { display: none; }
 <script>
 let scannerStocks = []; let meta = null;
 // v3.6: 近3日迷你K棒 · data/prices_recent.json(每日收盤後更新 · 失敗就顯示「—」不影響其他功能)
-let recentBars = {};
+let recentBars = {}; let recentAsOf = null;
 async function loadRecentBars() {
   try {
     const resp = await fetch('./data/prices_recent.json', { cache: 'no-cache' });
     if (!resp.ok) return false;
     const payload = await resp.json();
     recentBars = (payload && payload.bars) || {};
+    recentAsOf = (payload && payload.asOf) || null;
     return true;
   } catch (e) { return false; }
 }
@@ -618,7 +620,10 @@ function miniK(id, w = 52, h = 34) {
   const slot = w / 3, bw = Math.max(5, Math.round(slot * 0.5));
   const offset = 3 - bars.length;
   const fmt = v => (v >= 1000 ? v.toFixed(0) : v.toFixed(2));
-  const tip = bars.map(b => `${b[0].slice(5).replace('-', '/')} 開${fmt(b[1])} 高${fmt(b[2])} 低${fmt(b[3])} 收${fmt(b[4])}`).join('\n');
+  // v3.6.1: 最後一根早於全市場最新交易日(停牌/資料延遲)→ 變淡並在提示註明
+  const stale = recentAsOf && bars[bars.length - 1][0] < recentAsOf;
+  const tip = bars.map(b => `${b[0].slice(5).replace('-', '/')} 開${fmt(b[1])} 高${fmt(b[2])} 低${fmt(b[3])} 收${fmt(b[4])}`).join('\n')
+    + (stale ? `\n(資料只到 ${bars[bars.length - 1][0].slice(5).replace('-', '/')},最新交易日為 ${recentAsOf.slice(5).replace('-', '/')})` : '');
   const shapes = bars.map((b, i) => {
     const [, o, hh, ll, c] = b;
     const color = c > o ? '#f23645' : c < o ? '#089981' : '#8a94a8';
@@ -627,7 +632,7 @@ function miniK(id, w = 52, h = 34) {
     return `<line x1="${cx}" x2="${cx}" y1="${y(hh).toFixed(1)}" y2="${y(ll).toFixed(1)}" stroke="${color}" stroke-width="1"/>` +
       `<rect x="${(cx - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw}" height="${Math.max(1, bot - top).toFixed(1)}" fill="${color}"/>`;
   }).join('');
-  return `<svg class="mini-k" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="近3日K線"><title>${tip}</title>${shapes}</svg>`;
+  return `<svg class="mini-k${stale ? ' mini-k-stale' : ''}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="近3日K線"><title>${tip}</title>${shapes}</svg>`;
 }
 async function loadScanner() {
   const resp = await fetch('./data/scanner_index.json');
