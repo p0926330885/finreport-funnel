@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-21T05:45:52+0800",
+  "generated_at": "2026-09-22T02:07:25+0800",
   "source": "official_live",
   "twse_url": "https://openapi.twse.com.tw/v1/opendata/t187ap03_L",
   "tpex_url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O",
   "twse_as_of": "2026-09-20",
-  "tpex_as_of": "2026-09-20",
+  "tpex_as_of": "2026-09-21",
   "official_as_of": "2026-09-20",
   "twse_count": 1088,
   "tpex_count": 892,
