@@ -169,3 +169,14 @@ def test_extend_from_recent_saves_finmind(tmp_prices, monkeypatch):
     monkeypatch.setattr(prices, "_recent_cache", None)
     prices.update_price_history(c, "2330")
     assert len(c.calls) == 3
+
+
+def test_parse_twse_rwd_csv():
+    text = ('日期,證券代號,證券名稱,成交股數,成交金額,開盤價,最高價,最低價,收盤價,漲跌價差,成交筆數\n'
+            '"1150921","00400A","主動國泰動能高息","33792335","513300022","15.16","15.26","15.08","15.22","0.2200","6627"\n'
+            '"1150921","2330","台積電","40,893,000","1","2,450.00","2,470.00","2,440.00","2,465.00","+5.00","1"\n'
+            '="1150921",="1101","台泥","0","0","--","--","--","--","0","0"\n')
+    out = prices.parse_twse_rwd_csv(text)
+    assert out == {"2330": ["2026-09-21", 2450, 2470, 2440, 2465, 40893]}
+    assert prices._parse_twse_rwd_any(text) == out
+    assert prices.parse_twse_rwd_csv("<html>blocked</html>") == {}

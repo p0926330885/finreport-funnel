@@ -344,6 +344,51 @@ def parse_twse_rwd(payload: Any) -> dict[str, list]:
     return out
 
 
+def parse_twse_rwd_csv(text: Any) -> dict[str, list]:
+    """
+    v3.6.3:證交所官網實際回傳的是 CSV(即使網址寫 response=json):
+      日期,證券代號,證券名稱,成交股數,成交金額,開盤價,最高價,最低價,收盤價,漲跌價差,成交筆數
+      "1150921","2330","台積電","40,893,000",...
+    """
+    import csv
+    import io
+    out: dict[str, list] = {}
+    if not isinstance(text, str) or "證券代號" not in text:
+        return out
+    clean = lambda v: str(v).strip().lstrip("=").strip('"').strip()
+    pos = None
+    for row in csv.reader(io.StringIO(text)):
+        cells = [clean(c) for c in row]
+        if pos is None:
+            if "證券代號" in cells:
+                pos = {c: i for i, c in enumerate(cells)}
+                need = ["證券代號", "開盤價", "最高價", "最低價", "收盤價", "成交股數"]
+                if any(k not in pos for k in need):
+                    log.warning("TWSE rwd CSV 欄位不符:%s", cells)
+                    return {}
+            continue
+        if len(cells) < len(pos):
+            continue
+        sid = cells[pos["證券代號"]]
+        if not (len(sid) == 4 and sid.isdigit()):
+            continue
+        d = parse_roc_or_iso(cells[pos["日期"]]) if "日期" in pos else None
+        if not d:
+            continue
+        bar = make_bar(d, cells[pos["開盤價"]], cells[pos["最高價"]], cells[pos["最低價"]],
+                       cells[pos["收盤價"]], cells[pos["成交股數"]])
+        if bar:
+            out[sid] = bar
+    return out
+
+
+def _parse_twse_rwd_any(payload: Any, fallback_date: Optional[str] = None) -> dict[str, list]:
+    """官網版:可能是 JSON(dict)或 CSV(文字)· 兩種都吃"""
+    if isinstance(payload, dict):
+        return parse_twse_rwd(payload)
+    return parse_twse_rwd_csv(payload)
+
+
 def parse_tpex_day_all(data: Any, fallback_date: Optional[str] = None) -> dict[str, list]:
     out: dict[str, list] = {}
     for r in data if isinstance(data, list) else []:
@@ -366,7 +411,7 @@ def parse_tpex_day_all(data: Any, fallback_date: Optional[str] = None) -> dict[s
     return out
 
 
-def _http_json(url: str, retries: int = 3) -> Any:
+def _http_json(url: str, retries: int = 3, allow_text: bool = False) -> Any:
     import requests  # 延遲 import · 測試不需要網路
     last = None
     for i in range(1, retries + 1):
@@ -383,8 +428,12 @@ def _http_json(url: str, retries: int = 3) -> Any:
             try:
                 return resp.json()
             except ValueError:
+                resp.encoding = resp.encoding or "utf-8"
+                text = resp.text
+                if allow_text and "證券代號" in text:
+                    return text                     # 證交所官網回 CSV → 交給 CSV 解析器
                 # 回的不是 JSON(多半是擋爬蟲的網頁)→ 記下開頭方便診斷
-                snippet = " ".join(resp.text[:160].split())
+                snippet = " ".join(text[:160].split())
                 raise ValueError(f"非 JSON 回應(HTTP {resp.status_code}):{snippet}")
         except Exception as exc:  # noqa: BLE001
             last = exc
@@ -437,12 +486,12 @@ def run_daily() -> int:
     ok_sources = 0
     for name, url, parser, min_n in (
         # 證交所兩個版本都抓:官網 rwd 當天就更新 · openapi 晚一天(兩者日期不同時兩天都收)
-        ("TWSE-rwd", TWSE_RWD_DAY_ALL_URL, lambda j, fallback_date=None: parse_twse_rwd(j), MIN_TWSE_BARS),
+        ("TWSE-rwd", TWSE_RWD_DAY_ALL_URL, _parse_twse_rwd_any, MIN_TWSE_BARS),
         ("TWSE-openapi", TWSE_DAY_ALL_URL, parse_twse_day_all, MIN_TWSE_BARS),
         ("TPEx", TPEX_DAY_ALL_URL, parse_tpex_day_all, MIN_TPEX_BARS),
     ):
         try:
-            bars = parser(_http_json(url), fallback_date=today)
+            bars = parser(_http_json(url, allow_text=(name == "TWSE-rwd")), fallback_date=today)
         except Exception as exc:  # noqa: BLE001
             log.error("%s 抓取失敗: %s", name, exc)
             continue
