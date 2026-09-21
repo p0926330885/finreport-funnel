@@ -107,6 +107,8 @@ INDUSTRY_MAP = {
     "金融":             "finance",
 }
 INDUSTRY_DEFAULT = "traditional"
+# 大類標籤(非真正產業)· 多列時優先略過
+INDUSTRY_GENERIC = {"電子工業", "電子類", "創新板股票", "創新版股票"}
 
 # ============================================================
 # Phase 2: 特殊產業處理規則 (Pipeline 端)
