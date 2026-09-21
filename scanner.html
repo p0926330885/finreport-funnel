@@ -277,14 +277,19 @@ a { color: inherit; text-decoration: none; }
 .table-scroll { overflow-x: auto; }
 .results-table { width: 100%; border-collapse: collapse; min-width: 900px; }
 .results-table th { height: 48px; padding: 0 12px; background: var(--panel-2); border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
-.results-table th:nth-child(-n+3) { text-align: left; }
+.results-table th:nth-child(-n+4) { text-align: left; }
 .sort-btn { color: var(--text-dim); font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
 .sort-btn:hover, .sort-btn.active { color: var(--brass-hi); }
 .sort-mark { color: var(--brass); font: 500 10px var(--font-num); }
 .col-unit { color: inherit; font-size: inherit; }
 .results-table td { height: 54px; padding: 0 12px; border-bottom: 1px solid var(--line-soft); text-align: right; font-family: var(--font-num); white-space: nowrap; }
-.results-table td:nth-child(-n+3) { text-align: left; }
-.results-table td:nth-child(2), .results-table td:nth-child(3) { font-family: var(--font-ui); }
+.results-table td:nth-child(-n+4) { text-align: left; }
+.results-table td:nth-child(2), .results-table td:nth-child(4) { font-family: var(--font-ui); }
+/* v3.6: 近3日迷你K棒 */
+.results-table td.k3-cell { padding: 0 6px; line-height: 0; }
+.mini-k { display: inline-block; vertical-align: middle; overflow: visible; }
+.mini-k-empty { color: var(--text-muted); font: 500 12px var(--font-num); }
+.stock-card-k3 { flex: 0 0 auto; line-height: 0; margin-right: 4px; }
 .results-table tbody tr { cursor: pointer; transition: background 0.12s; }
 .results-table tbody tr:hover { background: var(--row-hover-bg); }
 .results-table tbody tr:last-child td { border-bottom: 0; }
@@ -593,6 +598,37 @@ body[data-status="ok"] .status-panel { display: none; }
 
 <script>
 let scannerStocks = []; let meta = null;
+// v3.6: 近3日迷你K棒 · data/prices_recent.json(每日收盤後更新 · 失敗就顯示「—」不影響其他功能)
+let recentBars = {};
+async function loadRecentBars() {
+  try {
+    const resp = await fetch('./data/prices_recent.json', { cache: 'no-cache' });
+    if (!resp.ok) return false;
+    const payload = await resp.json();
+    recentBars = (payload && payload.bars) || {};
+    return true;
+  } catch (e) { return false; }
+}
+function miniK(id, w = 52, h = 34) {
+  const bars = (recentBars[id] || []).slice(-3);
+  if (!bars.length) return '<span class="mini-k-empty">—</span>';
+  const hi = Math.max(...bars.map(b => b[2])), lo = Math.min(...bars.map(b => b[3]));
+  const pad = 2, span = hi - lo || hi * 0.01 || 1;
+  const y = v => pad + (hi - v) / span * (h - pad * 2);
+  const slot = w / 3, bw = Math.max(5, Math.round(slot * 0.5));
+  const offset = 3 - bars.length;
+  const fmt = v => (v >= 1000 ? v.toFixed(0) : v.toFixed(2));
+  const tip = bars.map(b => `${b[0].slice(5).replace('-', '/')} 開${fmt(b[1])} 高${fmt(b[2])} 低${fmt(b[3])} 收${fmt(b[4])}`).join('\n');
+  const shapes = bars.map((b, i) => {
+    const [, o, hh, ll, c] = b;
+    const color = c > o ? '#f23645' : c < o ? '#089981' : '#8a94a8';
+    const cx = (i + offset) * slot + slot / 2;
+    const top = y(Math.max(o, c)), bot = y(Math.min(o, c));
+    return `<line x1="${cx}" x2="${cx}" y1="${y(hh).toFixed(1)}" y2="${y(ll).toFixed(1)}" stroke="${color}" stroke-width="1"/>` +
+      `<rect x="${(cx - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw}" height="${Math.max(1, bot - top).toFixed(1)}" fill="${color}"/>`;
+  }).join('');
+  return `<svg class="mini-k" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="近3日K線"><title>${tip}</title>${shapes}</svg>`;
+}
 async function loadScanner() {
   const resp = await fetch('./data/scanner_index.json');
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -856,6 +892,7 @@ function renderControls() {
 const fixedColumns = [
   { key: 'id',       label: '股號',       tip: '股票代號。點擊欄位標題可依代號排序。' },
   { key: 'name',     label: '名稱',       tip: '公司簡稱。點擊欄位標題可依文字排序。' },
+  { key: 'k3',       label: '近3日',      tip: '近 3 個交易日日K · 紅漲綠跌。滑鼠停在圖上可看每天開高低收。', nosort: true },
   { key: 'industry', label: '產業',       tip: '公司所屬的單層產業分類。' },
   { key: 'rev',      label: '當季營收',   tip: '當季已認列的營業收入，金額單位統一顯示於欄位標題。' },
   { key: 'revYoY',   label: '營收 YoY',   tip: '相較去年同期營收的變化百分比。>15% 為強勁成長。' },
@@ -907,6 +944,7 @@ function renderCell(stock, column, revUnit) {
       else if (stock.lowBase === true)        badge = '<span class="stock-badge lowbase">⚠ 基期偏低</span>';
       return `<td>${v}${badge}</td>`;
     }
+    case 'k3':       return `<td class="k3-cell">${miniK(stock.id)}</td>`;
     case 'industry': return `<td class="stock-industry">${industries[stock.industry] || stock.industry || '—'}</td>`;
     case 'rev':      return `<td>${formatMoney(v, revUnit)}</td>`;
     case 'revYoY':
@@ -963,6 +1001,7 @@ function renderResults() {
   // 桌面版 · 動態表頭
   document.getElementById('resultsHead').innerHTML = `<tr>${columns.map(column => {
     const unit = column.key === 'rev' ? `<span class="col-unit">(${revUnit.unit})</span>` : '';
+    if (column.nosort) return `<th><span class="sort-btn" tabindex="0" data-tooltip="${column.tip}">${column.label}</span></th>`;
     return `<th><button class="sort-btn ${state.sortKey === column.key ? 'active' : ''}" data-sort="${column.key}" data-tooltip="${column.tip}">${column.label}${unit}<span class="sort-mark">${sortMark(column.key)}</span></button></th>`;
   }).join('')}</tr>`;
 
@@ -981,6 +1020,7 @@ function renderResults() {
           <span class="stock-card-title">${stock.id} · ${stock.name}</span>
           <div class="stock-card-industry">${industries[stock.industry] || stock.industry || '—'}</div>
         </div>
+        <span class="stock-card-k3">${miniK(stock.id, 54, 34)}</span>
         <span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span>
       </div>
       <div class="stock-card-grid">
@@ -1292,6 +1332,8 @@ async function boot() {
     } catch (e) {}
     bindControls();
     renderAll();
+    // v3.6: K棒資料晚一步載入 · 到了再重畫表格
+    loadRecentBars().then(ok => { if (ok) renderResults(); });
     // 綁定 Enter 搜尋 + 中文搜尋 (若 v2 已部署)
     if (typeof bindSmartSearch === 'function') { bindSmartSearch(); }
     else {

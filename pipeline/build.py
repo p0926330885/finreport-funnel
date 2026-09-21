@@ -25,7 +25,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import active_universe, config, ingest, models, output, transform, universe
+from . import active_universe, config, ingest, models, output, prices, transform, universe
 from .finmind_client import load_client
 
 logging.basicConfig(
@@ -194,6 +194,8 @@ def run(mode: str, stock_ids: list[str] | None = None, force: bool = False, batc
                 fail += 1
                 continue
             output.write_stock_detail(detail)
+            # v3.6: 順便更新這檔的歷史日K(失敗只記 log · 不影響財報)
+            prices.update_price_history(client, sid)
 
             row = transform.build_scanner_row(detail)
             if row is not None:

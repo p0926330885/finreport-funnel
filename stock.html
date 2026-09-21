@@ -8,6 +8,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<!-- v3.6: K 線圖(TradingView Lightweight Charts · Apache-2.0) -->
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js"></script>
+<script src="kline.js?v=3.6"></script>
 <style>
 /* =========================================================
    Tokens
@@ -1431,6 +1434,35 @@ body[data-status="ok"] .status-panel { display: none; }
 .insight-card[data-tone="amber"] .insight-num { color: var(--amber); }
 .insight-card[data-tone="red"]   .insight-num { color: var(--coral); }
 
+
+/* =========================================================
+   v3.6 · K 線圖
+   ========================================================= */
+.kline-card .card-head { flex-wrap: wrap; gap: 10px; }
+.kline-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 10px; }
+.kl-ma-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.kl-ma-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px 3px 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); font: 500 11px var(--font-num); color: var(--text-dim); cursor: default; }
+.kl-ma-chip.off { opacity: 0.45; }
+.kl-ma-toggle { width: 14px; height: 14px; border-radius: 50%; border: 0; background: var(--c); cursor: pointer; box-shadow: 0 0 0 2px rgba(0,0,0,0.25) inset; }
+.kl-ma-chip.off .kl-ma-toggle { background: transparent; box-shadow: 0 0 0 2px var(--c) inset; }
+.kl-ma-chip input { width: 42px; background: transparent; border: 0; border-bottom: 1px dashed var(--line-2); color: var(--text); font: 600 11px var(--font-num); text-align: center; padding: 1px 0; -moz-appearance: textfield; }
+.kl-ma-chip input::-webkit-outer-spin-button, .kl-ma-chip input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.kl-ma-chip input:focus { outline: none; border-bottom-color: var(--brass); }
+.kl-ma-reset { padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--text-dim); font: 500 11px var(--font-ui); cursor: pointer; }
+.kl-ma-reset:hover { color: var(--brass-hi); border-color: var(--brass-line); }
+.kline-wrap { position: relative; }
+.kline-chart { height: 460px; width: 100%; }
+.kline-legend { position: absolute; top: 4px; left: 6px; z-index: 3; pointer-events: none; font: 500 11px var(--font-num); color: var(--text-dim); display: flex; flex-direction: column; gap: 2px; max-width: calc(100% - 70px); }
+.kline-legend .kl-row { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.kline-legend b { font-weight: 600; color: var(--text); }
+.kline-legend .up { color: #f23645; } .kline-legend .down { color: #089981; } .kline-legend .flat { color: var(--text); }
+.kline-legend .kl-date { color: var(--text); }
+.kline-msg { padding: 40px 12px; text-align: center; color: var(--text-dim); font-size: 13px; }
+.kline-card.kline-empty .kline-wrap, .kline-card.kline-empty .kline-toolbar { display: none; }
+@media (max-width: 640px) {
+  .kline-chart { height: 340px; }
+  .kline-legend { position: static; font-size: 10px; max-width: none; margin-bottom: 6px; }
+}
 </style>
 </head>
 <body>
@@ -1482,6 +1514,20 @@ body[data-status="ok"] .status-panel { display: none; }
       </div>
     </div>
   </div>
+
+  <!-- v3.6: K 線圖 -->
+  <section class="card kline-card" id="klineCard">
+    <div class="card-head">
+      <div><h3 class="section-title" tabindex="0" data-tooltip="日K 線 · 紅漲綠跌(台股慣例)。滾輪縮放、拖曳平移,往左捲到底會自動載入更早的資料。下方為成交量(張)。">股價走勢</h3><p id="klineSub">日K · 紅漲綠跌</p></div>
+      <div class="period-toggle" id="klineRange" aria-label="顯示區間"><button data-range="3M">3M</button><button data-range="6M">6M</button><button data-range="1Y">1Y</button><button data-range="3Y">3Y</button><button data-range="ALL">全部</button></div>
+    </div>
+    <div class="kline-toolbar"><div class="kl-ma-controls" id="klineMaControls"></div></div>
+    <div class="kline-wrap">
+      <div class="kline-legend" id="klineLegend"></div>
+      <div class="kline-chart" id="klineChart"></div>
+    </div>
+    <div class="kline-msg" id="klineMsg">K 線載入中…</div>
+  </section>
 
   <section class="card order-panel" id="orderPanel" tabindex="-1">
     <div class="card-head">
@@ -2716,6 +2762,8 @@ async function boot() {
     if (searchBox) searchBox.value = stock.id;
     // === v3 (方案 C): 記住上次看的股票 ===
     try { localStorage.setItem('lastViewedStock', stock.id); } catch (e) {}
+    // v3.6: K 線圖(獨立模組 · 失敗不影響其他區塊)
+    try { if (typeof initKline === 'function') initKline(stock.id); } catch (e) { console.warn('kline', e); }
     // === 保險: 確保 topbar 連結可點 ===
     document.querySelectorAll('a.brand, a.nav-tab').forEach(link => {
       if (!link.dataset.linkBound) {
@@ -2810,7 +2858,8 @@ async function boot() {
       });
 
       document.addEventListener('click', e => {
-        if (!box.contains(e.target)) dropdown.hidden = true;
+        // v3.6 fix: 原本引用未定義的 box → 點頁面任何地方都會報錯
+        if (e.target !== searchBox && !dropdown.contains(e.target)) dropdown.hidden = true;
       });
 
       searchBox.addEventListener('focus', () => {
