@@ -118,7 +118,12 @@ jobs:
             echo "No data changes for batch ${{ steps.batch.outputs.batch }}"
           else
             git commit -m "Backfill batch ${{ steps.batch.outputs.batch }}/7 · $(TZ=Asia/Taipei date +%Y-%m-%d)"
-            git push
+            # v3.6: 每日股價 workflow 可能同時推送 → 先 rebase 再推(最多重試 3 次)
+            for i in 1 2 3; do
+              git pull --rebase --autostash && git push && break
+              if [ "$i" = "3" ]; then exit 1; fi
+              sleep 10
+            done
           fi
 
       # === GitHub Actions Summary (方便 review) ===
