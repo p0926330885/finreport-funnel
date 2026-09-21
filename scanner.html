@@ -600,18 +600,24 @@ body[data-status="ok"] .status-panel { display: none; }
 <script>
 let scannerStocks = []; let meta = null;
 // v3.6: 近3日迷你K棒 · data/prices_recent.json(每日收盤後更新 · 失敗就顯示「—」不影響其他功能)
-let recentBars = {}; let recentAsOf = null;
+let recentBars = {}; let recentAsOf = {};
 async function loadRecentBars() {
   try {
     const resp = await fetch('./data/prices_recent.json', { cache: 'no-cache' });
     if (!resp.ok) return false;
     const payload = await resp.json();
     recentBars = (payload && payload.bars) || {};
-    recentAsOf = (payload && payload.asOf) || null;
+    // v3.6.2: 上市、上櫃各自算「最新交易日」(證交所資料可能比櫃買晚一天 · 不能混在一起比)
+    recentAsOf = {};
+    const mkt = {}; scannerStocks.forEach(x => { mkt[x.id] = x.market; });
+    Object.entries(recentBars).forEach(([id, rows]) => {
+      const m = mkt[id] || 'other', last = rows && rows.length ? rows[rows.length - 1][0] : null;
+      if (last && (!recentAsOf[m] || last > recentAsOf[m])) recentAsOf[m] = last;
+    });
     return true;
   } catch (e) { return false; }
 }
-function miniK(id, w = 52, h = 34) {
+function miniK(id, w = 52, h = 34, market) {
   const bars = (recentBars[id] || []).slice(-3);
   if (!bars.length) return '<span class="mini-k-empty">—</span>';
   const hi = Math.max(...bars.map(b => b[2])), lo = Math.min(...bars.map(b => b[3]));
@@ -621,9 +627,10 @@ function miniK(id, w = 52, h = 34) {
   const offset = 3 - bars.length;
   const fmt = v => (v >= 1000 ? v.toFixed(0) : v.toFixed(2));
   // v3.6.1: 最後一根早於全市場最新交易日(停牌/資料延遲)→ 變淡並在提示註明
-  const stale = recentAsOf && bars[bars.length - 1][0] < recentAsOf;
+  const mAsOf = recentAsOf[market] || null;
+  const stale = mAsOf && bars[bars.length - 1][0] < mAsOf;
   const tip = bars.map(b => `${b[0].slice(5).replace('-', '/')} 開${fmt(b[1])} 高${fmt(b[2])} 低${fmt(b[3])} 收${fmt(b[4])}`).join('\n')
-    + (stale ? `\n(資料只到 ${bars[bars.length - 1][0].slice(5).replace('-', '/')},最新交易日為 ${recentAsOf.slice(5).replace('-', '/')})` : '');
+    + (stale ? `\n(資料只到 ${bars[bars.length - 1][0].slice(5).replace('-', '/')},最新交易日為 ${mAsOf.slice(5).replace('-', '/')})` : '');
   const shapes = bars.map((b, i) => {
     const [, o, hh, ll, c] = b;
     const color = c > o ? '#f23645' : c < o ? '#089981' : '#8a94a8';
@@ -949,7 +956,7 @@ function renderCell(stock, column, revUnit) {
       else if (stock.lowBase === true)        badge = '<span class="stock-badge lowbase">⚠ 基期偏低</span>';
       return `<td>${v}${badge}</td>`;
     }
-    case 'k3':       return `<td class="k3-cell">${miniK(stock.id)}</td>`;
+    case 'k3':       return `<td class="k3-cell">${miniK(stock.id, undefined, undefined, stock.market)}</td>`;
     case 'industry': return `<td class="stock-industry">${industries[stock.industry] || stock.industry || '—'}</td>`;
     case 'rev':      return `<td>${formatMoney(v, revUnit)}</td>`;
     case 'revYoY':
@@ -1025,7 +1032,7 @@ function renderResults() {
           <span class="stock-card-title">${stock.id} · ${stock.name}</span>
           <div class="stock-card-industry">${industries[stock.industry] || stock.industry || '—'}</div>
         </div>
-        <span class="stock-card-k3">${miniK(stock.id, 54, 34)}</span>
+        <span class="stock-card-k3">${miniK(stock.id, 54, 34, stock.market)}</span>
         <span class="score ${scoreClass(stock.score)}">${stock.score == null ? '—' : stock.score.toFixed(1)}</span>
       </div>
       <div class="stock-card-grid">

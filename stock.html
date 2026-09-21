@@ -1502,7 +1502,6 @@ body[data-status="ok"] .status-panel { display: none; }
       <div class="hero-crumb">TWSE · 系統整合</div>
       <div class="hero-title"><span class="hero-id">6789</span><span class="hero-name">示範系統</span></div>
       <div class="hero-chips">
-        <button class="chip chip-button" id="industryChip" data-tooltip="點擊查看同產業其他個股" aria-label="系統整合，點擊查看同產業其他個股">系統整合</button>
         <span class="chip chip-good chip-status" id="clChip" data-tooltip="本公司合約負債占營收比例 >15%,適合以訂單能見度分析" tabindex="0">含合約負債</span>
         <button class="chip chip-button" id="reportChip" data-tooltip="本季財報公布日:2026-08-14 · 資料來源:公開資訊觀測站" aria-expanded="false">最新財報 2026/2Q<span class="chip-popover">財報公布日:2026-08-14<br>資料來源:公開資訊觀測站</span></button>
         <button class="chip chip-button" id="monthlyChip" data-tooltip="本月營收公布日:2026-09-10 · 資料來源:公開資訊觀測站" aria-expanded="false">最新月營收 2026-08<span class="chip-popover">本月營收公布日:2026-09-10<br>資料來源:公開資訊觀測站</span></button>
@@ -2673,7 +2672,6 @@ function bindControls() {
     renderMaChart();
   });
 
-  document.getElementById('industryChip').addEventListener('click', () => alert('跳至選股掃描,篩選:系統整合'));
   ['reportChip', 'monthlyChip'].forEach(id => {
     const chip = document.getElementById(id);
     chip.addEventListener('click', event => {

@@ -371,9 +371,21 @@ def _http_json(url: str, retries: int = 3) -> Any:
     last = None
     for i in range(1, retries + 1):
         try:
-            resp = requests.get(url, timeout=(10, 60), headers={"User-Agent": "finreport-funnel/1.0"})
+            resp = requests.get(url, timeout=(10, 60), headers={
+                # v3.6.2: 證交所官網會擋非瀏覽器的 User-Agent → 模擬一般瀏覽器
+                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                               "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"),
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "zh-TW,zh;q=0.9",
+                "Referer": "https://www.twse.com.tw/zh/trading/historical/stock-day-all.html",
+            })
             resp.raise_for_status()
-            return resp.json()
+            try:
+                return resp.json()
+            except ValueError:
+                # 回的不是 JSON(多半是擋爬蟲的網頁)→ 記下開頭方便診斷
+                snippet = " ".join(resp.text[:160].split())
+                raise ValueError(f"非 JSON 回應(HTTP {resp.status_code}):{snippet}")
         except Exception as exc:  # noqa: BLE001
             last = exc
             log.warning("GET %s 失敗(%d/%d): %s", url, i, retries, exc)
