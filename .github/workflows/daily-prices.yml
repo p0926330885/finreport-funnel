@@ -9,10 +9,10 @@ name: Daily Prices (近期K棒)
 
 on:
   schedule:
-    # 週一~週五 台北 18:30(UTC 10:30)
-    - cron: "30 10 * * 1-5"
-    # 保險:台北 21:30 再跑一次(官方晚更新時補上 · 同一天重跑不會重複)
-    - cron: "30 13 * * 1-5"
+    # 週一~週五 台北 18:17(UTC 10:17)· 避開整點/半點,減少 GitHub 排程延遲
+    - cron: "17 10 * * 1-5"
+    # 保險:台北 21:13 再跑一次(官方晚更新時補上 · 同一天重跑不會重複)
+    - cron: "13 13 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -41,7 +41,10 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
 
-      - name: Update prices_recent.json
+      - name: Update prices_recent.json + trading_status.json
+        env:
+          # v3.6.6: 只用來查「最近沒成交」的少數股票最後成交日(每天最多 40 次)
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
         run: python -m pipeline.prices
 
       - name: Commit
@@ -49,6 +52,7 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/prices_recent.json
+          git add data/trading_status.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "No price changes"
             exit 0
