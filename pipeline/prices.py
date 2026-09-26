@@ -43,6 +43,15 @@ PRICE_HISTORY_START = "2016-01-01"
 PRICE_DATASET = "TaiwanStockPrice"
 PRICES_DIR: Path = config.DATA_DIR / "prices"
 PRICES_RECENT_PATH: Path = config.DATA_DIR / "prices_recent.json"
+TRADING_STATUS_PATH: Path = config.DATA_DIR / "trading_status.json"
+
+# v3.6.6 交易狀態判定(日曆天 · 以全市場最新交易日 asOf 為基準)
+#   · 暫停交易(減資換股、處置、停止買賣…)只加標籤,不移除
+#   · 真正下市(終止上市櫃)由 active_universe(證交所/櫃買官方公司清單)判定,批次會自動移出
+HALT_DAYS = 7          # 最後成交落後 > 7 天(約 5 個交易日)→ 「暫停交易」標籤
+FINMIND_LOOKBACK_DAYS = 120   # 查不到最後成交日時,向 FinMind 查近 120 天
+FINMIND_RECHECK_DAYS = 7      # 同一檔最多每 7 天向 FinMind 查一次
+FINMIND_STATUS_MAX_CALLS = 40
 
 # prices_recent.json 每檔保留幾根
 RECENT_KEEP_BARS = 10
@@ -443,14 +452,16 @@ def _http_json(url: str, retries: int = 3, allow_text: bool = False) -> Any:
 
 
 def merge_recent(existing: Optional[dict], new_bars: dict[str, list],
-                 tail_loader=None, keep: int = RECENT_KEEP_BARS) -> dict:
+                 tail_loader=None, keep: int = RECENT_KEEP_BARS,
+                 extra_ids: Iterable[str] = ()) -> dict:
     """
     existing: 舊的 prices_recent.json 內容
     new_bars: {stock_id: bar 或 [bar, bar...]} 官方資料
     tail_loader(stock_id, n): 從歷史檔補缺的函式(可為 None · 官方資料優先)
     """
     old = (existing or {}).get("bars", {}) if isinstance(existing, dict) else {}
-    ids = set(old) | set(new_bars)
+    # v3.6.6: extra_ids = 有歷史檔的股票 → 最近沒成交的也能從歷史補出 K 棒(前端會變淡顯示)
+    ids = set(old) | set(new_bars) | set(extra_ids)
     merged: dict[str, list] = {}
     for sid in sorted(ids):
         by_date = {b[0]: b for b in old.get(sid, []) if isinstance(b, list) and len(b) == 6}
@@ -477,6 +488,98 @@ def merge_recent(existing: Optional[dict], new_bars: dict[str, list],
         "fields": ["date", "open", "high", "low", "close", "volume_lots"],
         "bars": merged,
     }
+
+
+# ============================================================
+# 3. 交易狀態(暫停交易 / 停牌)· v3.6.6
+# ============================================================
+def _days_between(a: str, b: str) -> int:
+    return (date.fromisoformat(b) - date.fromisoformat(a)).days
+
+
+def build_trading_status(ids: Iterable[str], recent_bars: dict, as_of: str,
+                         prev: Optional[dict] = None, client=None,
+                         today: Optional[str] = None) -> dict:
+    """
+    ids: 選股清單上的所有股票
+    recent_bars: prices_recent.json 的 bars
+    as_of: 全市場最新交易日
+    client: FinMind client(可為 None · 只在「查不到最後成交日」時用 · 每天最多 40 次)
+    """
+    today = today or datetime.now(TAIPEI_TZ).date().isoformat()
+    prev_stocks = (prev or {}).get("stocks", {}) if isinstance(prev, dict) else {}
+    stocks: dict[str, dict] = {}
+    calls = 0
+    for sid in sorted(set(ids)):
+        p = prev_stocks.get(sid, {}) if isinstance(prev_stocks.get(sid), dict) else {}
+        cands = []
+        rows = recent_bars.get(sid) or []
+        if rows:
+            cands.append(rows[-1][0])
+        idx = load_index(sid)
+        if idx and idx.get("last"):
+            cands.append(str(idx["last"]))
+        if p.get("last"):
+            cands.append(p["last"])
+        last = max(cands) if cands else None
+        rec = {"last": last, "checked": p.get("checked"), "none_since": p.get("none_since")}
+
+        # 最近沒成交、又不知道最後成交日 → 向 FinMind 查(有節流)
+        need_check = (last is None or _days_between(last, as_of) > HALT_DAYS)
+        recently_checked = bool(rec["checked"]) and _days_between(rec["checked"], today) < FINMIND_RECHECK_DAYS
+        if need_check and client is not None and not recently_checked and calls < FINMIND_STATUS_MAX_CALLS:
+            start = (date.fromisoformat(as_of) - timedelta(days=FINMIND_LOOKBACK_DAYS)).isoformat()
+            try:
+                fm = finmind_rows_to_bars(client.fetch(PRICE_DATASET, data_id=sid, start_date=start))
+                calls += 1
+                rec["checked"] = today
+                if fm:
+                    rec["last"] = max(last or "", fm[-1][0]) or fm[-1][0]
+                    rec["none_since"] = None
+                else:
+                    rec["none_since"] = start      # 近 120 天完全沒成交
+            except Exception as exc:  # noqa: BLE001
+                log.warning("trading_status: %s FinMind 查詢失敗: %s", sid, exc)
+
+        last = rec["last"]
+        if last:
+            gap = _days_between(last, as_of)
+            rec["gap_days"] = gap
+            rec["state"] = "halted" if gap > HALT_DAYS else "trading"
+        elif rec.get("none_since"):
+            rec["state"] = "halted"            # 近 120 天完全沒成交(仍在官方掛牌清單 → 只標示不移除)
+        else:
+            rec["state"] = "unknown"          # 還沒有任何資料可判斷 → 不處理
+        stocks[sid] = {k: v for k, v in rec.items() if v is not None}
+
+    halted = sorted(k for k, v in stocks.items() if v.get("state") == "halted")
+    log.info("trading_status: 暫停交易 %d 檔 %s · FinMind 查詢 %d 次", len(halted), halted[:30], calls)
+    return {
+        "updated": datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M"),
+        "asOf": as_of,
+        "rules": {"halt_days": HALT_DAYS},
+        "halted": halted,
+        "stocks": stocks,
+    }
+
+
+def _scanner_ids() -> list[str]:
+    data = _read_json(config.SCANNER_INDEX_PATH)
+    rows = data.get("stocks", []) if isinstance(data, dict) else []
+    return [str(r.get("id")) for r in rows if isinstance(r, dict) and r.get("id")]
+
+
+def _optional_finmind_client():
+    import os
+    if not os.environ.get("FINMIND_TOKEN"):
+        log.info("未設定 FINMIND_TOKEN · 交易狀態只用官方資料判斷")
+        return None
+    try:
+        from .finmind_client import load_client
+        return load_client()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("FinMind client 建立失敗: %s", exc)
+        return None
 
 
 def run_daily() -> int:
@@ -508,9 +611,22 @@ def run_daily() -> int:
         log.error("所有來源都失敗 · 不寫檔")
         return 1
 
-    merged = merge_recent(_read_json(PRICES_RECENT_PATH), new_bars, tail_loader=read_history_tail)
+    hist_ids = [p.name for p in PRICES_DIR.iterdir() if p.is_dir()] if PRICES_DIR.exists() else []
+    merged = merge_recent(_read_json(PRICES_RECENT_PATH), new_bars, tail_loader=read_history_tail,
+                          extra_ids=hist_ids)
     _write_json(PRICES_RECENT_PATH, merged)
     log.info("prices_recent.json 已更新:%d 檔 · asOf=%s", len(merged["bars"]), merged["asOf"])
+
+    # v3.6.6: 交易狀態(暫停交易 / 停牌)
+    try:
+        ids = _scanner_ids()
+        if ids and merged["asOf"]:
+            status = build_trading_status(ids, merged["bars"], merged["asOf"],
+                                          prev=_read_json(TRADING_STATUS_PATH),
+                                          client=_optional_finmind_client())
+            _write_json(TRADING_STATUS_PATH, status)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("trading_status 更新失敗(不影響 K 棒): %s", exc)
     return 0
 
 

@@ -348,6 +348,7 @@ input { font-family: inherit; }
   font-family: var(--font-num);
 }
 
+.chip-halted { border-color: var(--line-2); color: var(--text-dim); }
 .chip-good {
   border-color: var(--mint-line);
   color: var(--mint);
@@ -1623,6 +1624,20 @@ async function loadStock() {
   const params = new URLSearchParams(location.search);
   const stockId = params.get('id') || '2330';
   document.getElementById('missingStockId').textContent = stockId;
+  // v3.6.6: 已下市(不在證交所/櫃買官方公司清單)→ 整頁不顯示
+  try {
+    const ar = await fetch('./data/active_universe.json', { cache: 'no-cache' });
+    if (ar.ok) {
+      const au = await ar.json();
+      const ids = au && Array.isArray(au.official_active_ids) ? au.official_active_ids : null;
+      if (ids && ids.length > 1000 && !ids.includes(stockId)) {
+        const panel = document.getElementById('notFoundPanel');
+        panel.querySelector('h2').innerHTML = `此股票已下市 <span id="missingStockId">${stockId}</span>`;
+        panel.querySelector('p').textContent = '這檔股票已不在證交所/櫃買中心的上市櫃公司清單中(終止上市或上櫃),因此從網站移除。';
+        throw new NotFoundError(stockId);
+      }
+    }
+  } catch (e) { if (e instanceof NotFoundError) throw e; }
   const resp = await fetch(`./data/stocks/${stockId}.json`);
   if (resp.status === 404) throw new NotFoundError(stockId);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -2764,6 +2779,39 @@ async function boot() {
     if (searchBox) searchBox.value = stock.id;
     // === v3 (方案 C): 記住上次看的股票 ===
     try { localStorage.setItem('lastViewedStock', stock.id); } catch (e) {}
+    // v3.6.6 fix: 「最新財報 / 最新月營收」標籤原本是寫死的示範文字 → 改用這檔股票的實際資料
+    try {
+      const lastQ = stock.quarterly && stock.quarterly.length ? stock.quarterly[stock.quarterly.length - 1].q : null;
+      const lastM = stock.monthly && stock.monthly.length ? stock.monthly[stock.monthly.length - 1][0] : null;
+      const setChip = (id, label, tip) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (!label) { el.hidden = true; return; }
+        el.innerHTML = `${label}<span class="chip-popover">${tip}</span>`;
+        el.dataset.tooltip = tip.replace(/<br>/g, ' · ');
+      };
+      setChip('reportChip', lastQ ? `最新財報 ${lastQ}` : null, `最新一季財報:${lastQ}<br>資料來源:FinMind(公開資訊觀測站)`);
+      setChip('monthlyChip', lastM ? `最新月營收 ${lastM}` : null, `最新月營收:${lastM}<br>資料來源:FinMind(公開資訊觀測站)`);
+    } catch (e) {}
+    // v3.6.6: 暫停交易 → 標題旁標籤(下市股在 loadStock 就已擋下)
+    (async () => {
+      try {
+        const r = await fetch('./data/trading_status.json', { cache: 'no-cache' });
+        if (!r.ok) return;
+        const ts = await r.json();
+        const st = ts && ts.stocks && ts.stocks[stock.id];
+        if (!st) return;
+        const chips = document.querySelector('.hero-chips');
+        if (st.state === 'halted' && chips) {
+          const c = document.createElement('span');
+          c.className = 'chip chip-halted';
+          c.tabIndex = 0;
+          c.dataset.tooltip = st.last ? `最後成交 ${st.last} · 已 ${st.gap_days} 天沒有成交` : '近 120 天沒有成交';
+          c.textContent = st.last ? `暫停交易 · 最後成交 ${st.last.slice(5).replace('-', '/')}` : '暫停交易';
+          chips.prepend(c);
+        }
+      } catch (e) { /* 狀態檔不存在時略過 */ }
+    })();
     // v3.6: K 線圖(獨立模組 · 失敗不影響其他區塊)
     try { if (typeof initKline === 'function') initKline(stock.id); } catch (e) { console.warn('kline', e); }
     // === 保險: 確保 topbar 連結可點 ===

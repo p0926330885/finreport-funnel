@@ -180,3 +180,49 @@ def test_parse_twse_rwd_csv():
     assert out == {"2330": ["2026-09-21", 2450, 2470, 2440, 2465, 40893]}
     assert prices._parse_twse_rwd_any(text) == out
     assert prices.parse_twse_rwd_csv("<html>blocked</html>") == {}
+
+
+# ============================================================
+# v3.6.6 交易狀態
+# ============================================================
+def test_trading_status_rules(tmp_prices, monkeypatch):
+    monkeypatch.setattr(prices, "TRADING_STATUS_PATH", tmp_prices / "trading_status.json")
+    recent = {"2330": [["2026-09-21", 1, 1, 1, 1, 1]],          # 正常
+              "6550": [["2026-09-10", 1, 1, 1, 1, 1]],          # 11 天沒成交 → 暫停交易
+              "1111": [["2026-08-01", 1, 1, 1, 1, 1]]}          # 減資停止買賣很久 → 仍只是暫停交易
+
+    class FM:
+        def __init__(self):
+            self.calls = []
+        def fetch(self, dataset, **params):
+            self.calls.append(params["data_id"])
+            if params["data_id"] == "2926":
+                return [_fm("2026-09-18", 10, 10, 10, 10)]  # 查得到最後成交
+            return []                                       # 近 120 天沒成交
+
+    fm = FM()
+    st = prices.build_trading_status(["2330", "6550", "1111", "1589", "2926"], recent, "2026-09-21",
+                                     client=fm, today="2026-09-22")
+    s = st["stocks"]
+    assert s["2330"]["state"] == "trading"
+    assert s["6550"]["state"] == "halted" and s["6550"]["gap_days"] == 11
+    assert s["1111"]["state"] == "halted" and s["1111"]["gap_days"] == 51
+    assert s["1589"]["state"] == "halted" and "none_since" in s["1589"]
+    assert s["2926"]["state"] == "trading" and s["2926"]["last"] == "2026-09-18"
+    assert st["halted"] == ["1111", "1589", "6550"] and "suspended" not in st
+    assert "2330" not in fm.calls                               # 正常交易不查 FinMind
+
+    # 隔天:7 天內不重查 · 恢復交易的自動回到 trading
+    fm2 = FM()
+    recent["1589"] = [["2026-09-22", 6, 6, 6, 6, 100]]
+    st2 = prices.build_trading_status(["1589", "1111"], recent, "2026-09-22", prev=st, client=fm2,
+                                      today="2026-09-23")
+    assert st2["stocks"]["1589"]["state"] == "trading"
+    assert fm2.calls == []                                      # 1111 昨天剛查過
+
+
+def test_merge_recent_extra_ids_from_history():
+    tail = {"8444": [["2026-09-17", 1, 1, 1, 1, 1], ["2026-09-18", 2, 2, 2, 2, 2]]}
+    m = prices.merge_recent(None, {"2330": ["2026-09-21", 3, 3, 3, 3, 3]},
+                            tail_loader=lambda sid, n: tail.get(sid, []), extra_ids=["8444"], keep=5)
+    assert [b[0] for b in m["bars"]["8444"]] == ["2026-09-17", "2026-09-18"]
