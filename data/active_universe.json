@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-30T07:30:47+0800",
+  "generated_at": "2026-10-31T07:07:58+0800",
   "source": "official_live",
   "twse_url": "https://openapi.twse.com.tw/v1/opendata/t187ap03_L",
   "tpex_url": "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O",
-  "twse_as_of": "2026-10-29",
-  "tpex_as_of": "2026-10-29",
-  "official_as_of": "2026-10-29",
-  "twse_count": 1092,
-  "tpex_count": 896,
-  "official_active_size": 1988,
+  "twse_as_of": "2026-10-30",
+  "tpex_as_of": "2026-10-30",
+  "official_as_of": "2026-10-30",
+  "twse_count": 1093,
+  "tpex_count": 897,
+  "official_active_size": 1990,
   "twse_ids": [
     "1101",
     "1102",
@@ -1003,6 +1003,7 @@
     "7827",
     "7835",
     "7855",
+    "7867",
     "8011",
     "8016",
     "8021",
@@ -1801,6 +1802,7 @@
     "6811",
     "6821",
     "6823",
+    "6825",
     "6829",
     "6840",
     "6841",
@@ -3613,6 +3615,7 @@
     "6811",
     "6821",
     "6823",
+    "6825",
     "6829",
     "6830",
     "6831",
@@ -3777,6 +3780,7 @@
     "7842",
     "7855",
     "7856",
+    "7867",
     "8011",
     "8016",
     "8021",
@@ -3992,5 +3996,5 @@
     "9960",
     "9962"
   ],
-  "ids_checksum": "sha256:67db2946b7c7b6ace5623fd54cd4ce049cbd5efb2951a8b5feb04c2c43c1a39c"
+  "ids_checksum": "sha256:b80e6a2a730132fe035da7331048a930c916752db8430c854b1bc8915462e02b"
 }
